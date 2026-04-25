@@ -48,7 +48,8 @@ export default function Race() {
   const race = useRaceData(key, sessionDateEnd);
 
   // ── Overtake banner state ────────────────────────────────────────────────
-  const [activeBannerOvertake, setActiveBannerOvertake] = useState<OvertakeEvent | null>(null);
+  const [activeBannerOvertake, setActiveBannerOvertake] =
+    useState<OvertakeEvent | null>(null);
   useEffect(() => {
     if (race.overtakes.length > 0)
       setActiveBannerOvertake(race.overtakes[race.overtakes.length - 1]);
@@ -154,10 +155,14 @@ export default function Race() {
   const currentLap = replayLaps.reduce((m, l) => Math.max(m, l.lap_number), 0);
 
   const bannerOvertakingDriver = activeBannerOvertake
-    ? race.drivers.find((d) => d.driver_number === activeBannerOvertake.overtakingDriver)
+    ? race.drivers.find(
+        (d) => d.driver_number === activeBannerOvertake.overtakingDriver,
+      )
     : null;
   const bannerOvertakenDriver = activeBannerOvertake
-    ? race.drivers.find((d) => d.driver_number === activeBannerOvertake.overtakenDriver)
+    ? race.drivers.find(
+        (d) => d.driver_number === activeBannerOvertake.overtakenDriver,
+      )
     : null;
 
   const drsActive = (carLatest?.drs ?? 0) >= 10;
@@ -189,140 +194,12 @@ export default function Race() {
   const panelBottom = REPLAY_H + TICKER_H;
 
   // ── Loading / error states ───────────────────────────────────────────────
-  if (race.loading) {
-    return (
-      <div
-        className="h-screen flex flex-col items-center justify-center gap-4"
-        style={{ background: "#06070a" }}
-      >
-        <div className="w-8 h-8 border-2 border-[#e8002d] border-t-transparent rounded-full animate-spin" />
-        <span
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 13,
-            color: "#4b5563",
-            letterSpacing: "0.2em",
-          }}
-        >
-          LOADING SESSION {key}
-        </span>
-      </div>
-    );
-  }
-
-  if (race.error && !race.drivers.length) {
-    return (
-      <div
-        className="h-screen flex flex-col items-center justify-center gap-4"
-        style={{ background: "#06070a" }}
-      >
-        <span className="text-[#e8002d] text-sm font-mono">{race.error}</span>
-        <Link to="/" className="text-[#4b5563] text-xs underline">
-          ← Back
-        </Link>
-      </div>
-    );
-  }
-
-  const sessionName = session
-    ? `${session.country_name} — ${session.session_name}`
-    : `Session ${key}`;
-  const sessionType = session?.session_type ?? "";
-  const sessionLocation =
-    session?.circuit_short_name ?? session?.location ?? "";
-
   return (
     <div
-      className="h-screen overflow-hidden relative"
+      className="h-screen flex flex-col items-center justify-center gap-4"
       style={{ background: "#06070a" }}
     >
-      {/* ── Layer 0: Full-screen track map ────────────────────────────── */}
-      <div className="absolute inset-0 z-0">
-        <TrackMap
-          outline={trackMap.outline}
-          livePositions={trackMap.livePositions}
-          drivers={race.drivers}
-          selectedDriver={effectiveDriver}
-          onSelectDriver={setSelectedDriver}
-          sessionName={sessionName}
-          ready={trackMap.ready}
-        />
-      </div>
-
-      {/* ── Layer 3: Header ───────────────────────────────────────────── */}
-      {/* <div className="relative z-30" style={{ height: HEADER_H }}> */}
-      {/*   <Header */}
-      {/*     sessionName={sessionName} */}
-      {/*     sessionType={sessionType} */}
-      {/*     location={sessionLocation} */}
-      {/*     currentLap={currentLap} */}
-      {/*     totalLaps={0} */}
-      {/*     weather={race.weather} */}
-      {/*     raceControl={replayRaceControl} */}
-      {/*   /> */}
-      {/* </div> */}
-
-      {/* ── Layer 4: Overtake banner ──────────────────────────────────── */}
-      {activeBannerOvertake && bannerOvertakingDriver && bannerOvertakenDriver && (
-        <OvertakeBanner
-          overtake={activeBannerOvertake}
-          overtakingDriver={bannerOvertakingDriver}
-          overtakenDriver={bannerOvertakenDriver}
-          headerHeight={HEADER_H}
-          onDismiss={() => setActiveBannerOvertake(null)}
-        />
-      )}
-
-      {/* ── Layer 2: Left panel — Standings ──────────────────────────── */}
-      <StandingsPanel
-        top={panelTop}
-        bottom={panelBottom}
-        width={leftW}
-        onWidthChange={setLeftW}
-        positions={replayPositions}
-        drivers={race.drivers}
-        intervals={replayIntervals}
-        laps={replayLaps}
-        stints={replayStints}
-        pits={replayPits}
-        positionChanges={race.positionChanges}
-        selectedDriver={effectiveDriver}
-        onSelectDriver={setSelectedDriver}
-        hasError={!!race.error}
-        recentOvertakes={race.overtakes}
-        drsDriver={effectiveDriver}
-        drsActive={drsActive}
-      />
-
-      {/* ── Layer 2: Right panel — Telemetry + Radio ─────────────────── */}
-      {/* <TelemetryPanel */}
-      {/*   top={panelTop} */}
-      {/*   bottom={panelBottom} */}
-      {/*   width={rightW} */}
-      {/*   onWidthChange={setRightW} */}
-      {/*   driver={selectedDriverObj} */}
-      {/*   latest={carLatest} */}
-      {/*   history={carHistory} */}
-      {/*   lastLap={selectedLastLap} */}
-      {/*   currentStint={selectedStint} */}
-      {/*   radio={replayTeamRadio} */}
-      {/*   drivers={race.drivers} */}
-      {/*   selectedDriver={effectiveDriver} */}
-      {/* /> */}
-
-      {/* ── Layer 2: Bottom ticker — Race control ─────────────────────── */}
-      <RcTickerPanel
-        messages={replayRaceControl}
-        left={leftW}
-        right={rightW}
-        bottom={REPLAY_H}
-        height={TICKER_H}
-      />
-
-      {/* ── Layer 3: Replay controls ──────────────────────────────────── */}
-      <div className="absolute z-30 bottom-0 left-0 right-0">
-        <ReplayControls {...replay} />
-      </div>
+      <div className="loader" />
     </div>
   );
 }

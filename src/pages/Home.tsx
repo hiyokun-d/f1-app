@@ -90,6 +90,43 @@ export default function Home() {
       className="h-screen flex flex-col overflow-hidden relative speed-lines"
       style={{ background: 'var(--f1-dark)' }}
     >
+      {/* WIP Status Bar */}
+      <div
+        className="flex items-center justify-center gap-3 py-1.5 shrink-0"
+        style={{
+          background: 'rgba(255,214,0,0.05)',
+          borderBottom: '1px solid rgba(255,214,0,0.12)',
+        }}
+      >
+        <div
+          className="w-1.5 h-1.5 rounded-full shrink-0"
+          style={{
+            background: 'var(--f1-accent)',
+            boxShadow: '0 0 6px var(--f1-accent)',
+            animation: 'flag-pulse 1.8s ease-in-out infinite',
+          }}
+        />
+        <span
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 10,
+            color: '#7a6e38',
+            letterSpacing: '0.28em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Safety car deployed — still building this
+        </span>
+        <div
+          className="w-1.5 h-1.5 rounded-full shrink-0"
+          style={{
+            background: 'var(--f1-accent)',
+            boxShadow: '0 0 6px var(--f1-accent)',
+            animation: 'flag-pulse 1.8s ease-in-out infinite 0.9s',
+          }}
+        />
+      </div>
+
       {/* Top bar */}
       <div className="flex items-center justify-between px-8 pt-7 shrink-0">
         <div className="flex items-center gap-3">

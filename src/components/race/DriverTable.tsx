@@ -233,15 +233,15 @@ export default function DriverTable({
         if (bg)
           animate(bg, {
             backgroundColor: ["rgba(255,214,0,0)", "rgba(255,214,0,0.22)"],
-            duration: 180,
+            duration: 580,
             ease: "outQuart",
           });
         if (label) {
           animate(label, { opacity: [0, 1], duration: 120, ease: "outQuart" });
           animate(label, {
             opacity: [1, 0],
-            duration: 220,
-            delay: 820,
+            duration: 920,
+            delay: 520,
             ease: "inQuart",
           });
         }
@@ -250,7 +250,8 @@ export default function DriverTable({
         if (bg)
           animate(bg, {
             backgroundColor: ["rgba(255,214,0,0.22)", "rgba(34,197,94,0.2)"],
-            duration: 350,
+            duration: 750,
+            delay: 849,
             ease: "outQuart",
           });
         if (label) animate(label, { opacity: [1, 0], duration: 150 });
@@ -258,7 +259,7 @@ export default function DriverTable({
           animate(time, {
             opacity: [0, 1],
             y: [5, 0],
-            duration: 280,
+            duration: 880,
             ease: "outBack(1.5)",
           });
       }

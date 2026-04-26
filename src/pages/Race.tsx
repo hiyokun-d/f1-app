@@ -14,6 +14,7 @@ import StandingsPanel from "../components/race/panels/StandingsPanel";
 import TelemetryPanel from "../components/race/panels/TelemetryPanel";
 import RcTickerPanel from "../components/race/panels/RcTickerPanel";
 import OvertakeBanner from "../components/race/panels/OvertakeBanner";
+import ComingSoon from "../components/race/ComingSoon";
 
 // Fixed layout heights (px)
 const HEADER_H = 48;
@@ -194,12 +195,5 @@ export default function Race() {
   const panelBottom = REPLAY_H + TICKER_H;
 
   // ── Loading / error states ───────────────────────────────────────────────
-  return (
-    <div
-      className="h-screen flex flex-col items-center justify-center gap-4"
-      style={{ background: "#06070a" }}
-    >
-      <div className="loader" />
-    </div>
-  );
+  return <ComingSoon sessionKey={key} />;
 }

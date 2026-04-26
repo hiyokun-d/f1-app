@@ -81,3 +81,11 @@ Team radio audio files are served via `/f1-audio` proxy (`vite.config.ts`) to by
 ### Currently commented-out components
 
 `Header` and `TelemetryPanel` are wired up in `Race.tsx` but JSX-commented out. Their props and data derivation are still present.
+
+### Coming-soon / WIP screen
+
+`Race.tsx` currently returns `<ComingSoon />` from `src/components/race/ComingSoon.tsx` — the full race UI panels are not yet assembled. `ComingSoon` is a standalone screen (canvas sparks, glitch title, fake telemetry, radio cycler, standings + sector side panels, bottom ticker). When the real race layout is ready, replace the single `return <ComingSoon />;` line at the bottom of `Race.tsx`.
+
+### TODO tracking
+
+`TODO.md` at repo root tracks what is done, in progress, and next. Update it when finishing features or discovering new work.

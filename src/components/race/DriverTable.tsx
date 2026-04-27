@@ -936,7 +936,7 @@ export default function DriverTable({
               {/* Driver name + single highest-priority badge */}
               <div className="flex items-center gap-1 min-w-0 overflow-hidden">
                 <span
-                  className="truncate flex-shrink-0"
+                  className="truncate min-w-0"
                   style={{
                     fontFamily: "var(--font-display)",
                     fontWeight: 700,

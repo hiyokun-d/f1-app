@@ -27,7 +27,7 @@ export default function Race() {
   if (!key || isNaN(key)) return <Navigate to="/" replace />;
 
   // ── Panel widths (resizable) ─────────────────────────────────────────────
-  const [leftW, setLeftW] = useState(340);
+  const [leftW, setLeftW] = useState(370);
   const [rightW, setRightW] = useState(290);
 
   // ── Session ──────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import type React from "react";
 import type {
   Driver,
   Position,
@@ -18,7 +19,8 @@ import {
   animate,
   createLayout,
   createScope,
-  cubicBezier,
+  createTimeline,
+  spring,
   stagger,
 } from "animejs";
 import type { AutoLayout } from "animejs";
@@ -42,11 +44,174 @@ const TYRE_COLORS: Record<string, { bg: string; text: string; label: string }> =
   {
     SOFT: { bg: "#e8002d", text: "#fff", label: "S" },
     MEDIUM: { bg: "#ffd600", text: "#000", label: "M" },
-    HARD: { bg: "#ffffff", text: "#000", label: "H" },
+    HARD: { bg: "#e8e8e8", text: "#000", label: "H" },
     INTERMEDIATE: { bg: "#39b54a", text: "#fff", label: "I" },
     WET: { bg: "#0067ff", text: "#fff", label: "W" },
-    UNKNOWN: { bg: "#555", text: "#fff", label: "?" },
+    UNKNOWN: { bg: "#333", text: "#888", label: "?" },
   };
+
+// Rough expected stint lengths per compound — used for pit prediction badges.
+// These are conservative estimates; real windows vary by circuit + car.
+const TYRE_LIFE_LAPS: Record<string, number> = {
+  SOFT: 22,
+  MEDIUM: 34,
+  HARD: 48,
+  INTERMEDIATE: 35,
+  WET: 999,
+  UNKNOWN: 30,
+};
+
+const RING_R = 11;
+const RING_CIRC = 2 * Math.PI * RING_R;
+
+type BadgeVariant =
+  | "pit"
+  | "out"
+  | "fl"
+  | "drs"
+  | "pass"
+  | "lost"
+  | "box-soon"
+  | "box-now";
+
+const BADGE_CFG: Record<
+  BadgeVariant,
+  { label: string; color: string; bg: string; border: string; pulse?: string; ls?: string }
+> = {
+  pit:      { label: "PIT",  color: "#ffb800", bg: "rgba(255,185,0,0.16)",   border: "rgba(255,185,0,0.32)" },
+  out:      { label: "OUT",  color: "#22c55e", bg: "rgba(34,197,94,0.14)",   border: "rgba(34,197,94,0.28)" },
+  fl:       { label: "FL",   color: "#c084fc", bg: "rgba(192,132,252,0.14)", border: "rgba(192,132,252,0.28)" },
+  drs:      { label: "DRS",  color: "#00ff88", bg: "rgba(0,255,136,0.1)",    border: "rgba(0,255,136,0.32)", pulse: "drs-badge-pulse 1.6s ease-in-out infinite" },
+  pass:     { label: "PASS", color: "#22c55e", bg: "rgba(34,197,94,0.14)",   border: "rgba(34,197,94,0.28)", ls: "0.3em" },
+  lost:     { label: "LOST", color: "#ef4444", bg: "rgba(239,68,68,0.14)",   border: "rgba(239,68,68,0.28)", ls: "0.3em" },
+  "box-soon": { label: "SOON", color: "#f97316", bg: "rgba(249,115,22,0.14)", border: "rgba(249,115,22,0.3)" },
+  "box-now":  { label: "BOX",  color: "#ef4444", bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.35)", pulse: "pit-now-pulse 1.1s ease-in-out infinite" },
+};
+
+function StatusBadge({ variant, children }: { variant: BadgeVariant; children?: React.ReactNode }) {
+  const s = BADGE_CFG[variant];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        fontFamily: "var(--font-display)",
+        fontSize: 8,
+        fontWeight: 900,
+        letterSpacing: s.ls ?? "0.12em",
+        padding: "1px 5px 0",
+        borderRadius: 2,
+        flexShrink: 0,
+        lineHeight: "14px",
+        textTransform: "uppercase",
+        color: s.color,
+        background: s.bg,
+        border: `1px solid ${s.border}`,
+        ...(s.pulse ? { animation: s.pulse } : {}),
+      }}
+    >
+      {children ?? s.label}
+    </span>
+  );
+}
+
+function TyreBadge({
+  tyre,
+  wearFraction,
+  hasWearData,
+  isPitting,
+  isJustOut,
+  pitSoon,
+  pitNow,
+}: {
+  tyre: { bg: string; text: string; label: string };
+  wearFraction: number; // 0 = fresh, 1 = fully worn
+  hasWearData: boolean;
+  isPitting: boolean;
+  isJustOut: boolean;
+  pitSoon: boolean;
+  pitNow: boolean;
+}) {
+  // Remaining arc: full circle when fresh, shrinks to nothing when worn
+  const dashOffset = RING_CIRC * wearFraction;
+
+  // Ring color shifts fresh → warm → critical
+  const ringColor = isPitting
+    ? "#ffb800"
+    : isJustOut
+      ? "#22c55e"
+      : pitNow
+        ? "#ef4444"
+        : pitSoon
+          ? "#f97316"
+          : wearFraction > 0.65
+            ? "#eab308"
+            : "#22c55e";
+
+  const glowClass = isPitting
+    ? "tyre-badge-pit-glow"
+    : isJustOut
+      ? "tyre-badge-out-glow"
+      : "";
+
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 28 28"
+      className={glowClass}
+      style={{ overflow: "visible", flexShrink: 0 }}
+    >
+      {/* Dim full-circle track — shows total wear space */}
+      <circle
+        cx="14"
+        cy="14"
+        r={RING_R}
+        fill="none"
+        stroke="rgba(255,255,255,0.07)"
+        strokeWidth="2.5"
+      />
+
+      {/* Remaining life arc — depletes clockwise as tyre wears */}
+      {hasWearData && (
+        <circle
+          cx="14"
+          cy="14"
+          r={RING_R}
+          fill="none"
+          stroke={ringColor}
+          strokeWidth="2.5"
+          strokeDasharray={RING_CIRC}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          transform="rotate(-90 14 14)"
+          style={{
+            transition: "stroke-dashoffset 2s ease, stroke 1.2s ease",
+          }}
+        />
+      )}
+
+      {/* Compound colour fill */}
+      <circle cx="14" cy="14" r="8.5" fill={tyre.bg} />
+
+      {/* Compound letter */}
+      <text
+        x="14"
+        y="18"
+        textAnchor="middle"
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 10,
+          fontWeight: 900,
+          fill: tyre.text,
+          userSelect: "none",
+        }}
+      >
+        {tyre.label}
+      </text>
+    </svg>
+  );
+}
 
 function PositionNumber({
   pos,
@@ -75,7 +240,8 @@ function PositionNumber({
         display: "inline-block",
         fontFamily: "var(--font-data)",
         fontWeight: 900,
-        fontSize: 14,
+        fontSize: 15,
+        letterSpacing: "-0.04em",
         color:
           change === "up"
             ? "#22c55e"
@@ -83,7 +249,7 @@ function PositionNumber({
               ? "#ef4444"
               : pos === 1
                 ? "#ffd600"
-                : "#fff",
+                : "#c9cdd6",
       }}
     >
       {pos}
@@ -109,7 +275,7 @@ export default function DriverTable({
   const hasAnimated = useRef(false);
   const layout = useRef<AutoLayout | null>(null);
   const prevPitRef = useRef(new Map<number, string>());
-  const prevOvertakesLenRef = useRef(-1); // -1 = uninitialized, skip first batch
+  const prevOvertakesLenRef = useRef(-1);
   const prevDrsRef = useRef<{
     active: boolean;
     driver: number | null | undefined;
@@ -152,7 +318,6 @@ export default function DriverTable({
     ),
   );
 
-  // Most recent completed pit stop per driver (for showing duration on exit)
   const lastPitMap = new Map<number, Pit>();
   pits.forEach((p) => {
     if (p.pit_duration === null) return;
@@ -163,43 +328,35 @@ export default function DriverTable({
 
   const maxLap = laps.reduce((m, l) => Math.max(m, l.lap_number), 0);
 
-  // 'pitting'  — driver is currently in the pit lane
-  // 'just_out' — driver just exited on this or the previous lap
   const pitStatusMap = new Map<number, "pitting" | "just_out">();
 
-  // just_out: latest lap is a pit-out lap on a recent lap
   lapMap.forEach((lap, dn) => {
     if (lap.is_pit_out_lap && lap.lap_number >= maxLap - 1)
       pitStatusMap.set(dn, "just_out");
   });
 
   pits.forEach((p) => {
-    if (p.lap_number < maxLap - 1) return; // too old
-    if (pitStatusMap.get(p.driver_number) === "just_out") return; // already out
-
+    if (p.lap_number < maxLap - 1) return;
+    if (pitStatusMap.get(p.driver_number) === "just_out") return;
     if (p.pit_duration === null) {
-      // Live: null duration means still in pit
       pitStatusMap.set(p.driver_number, "pitting");
     } else {
-      // Replay: pit on recent lap but driver's latest lap isn't a pit-out → still in
       const latestLap = lapMap.get(p.driver_number);
       if (!latestLap?.is_pit_out_lap)
         pitStatusMap.set(p.driver_number, "pitting");
     }
   });
 
-  // Create AnimeJS layout + ResizeObserver for breakpoint switching
+  // AnimeJS layout + ResizeObserver for compact/expanded breakpoint
   useEffect(() => {
     if (!driverLayout.current) return;
-
     layout.current = createLayout(driverLayout.current, {
       children: ".driver-detail",
-      enterFrom: { opacity: 0, x: -8 },
-      leaveTo: { opacity: 0, x: -8 },
-      duration: 350,
+      enterFrom: { opacity: 0, x: -10 },
+      leaveTo: { opacity: 0, x: -10 },
+      duration: 380,
       ease: "inOut(3)",
     });
-
     let expanded = false;
     const ro = new ResizeObserver(([entry]) => {
       const shouldExpand = entry.contentRect.width >= 380;
@@ -210,7 +367,6 @@ export default function DriverTable({
       });
     });
     ro.observe(driverLayout.current);
-
     return () => {
       ro.disconnect();
       layout.current?.revert();
@@ -218,76 +374,116 @@ export default function DriverTable({
     };
   }, []);
 
-  // Row-level pit animation: yellow bg + PITTING flash → green bg + pit time
+  // Pit animation via createTimeline — chains bg flash + label pulse
+  // FIX: initial opacity/bg are in CSS (.pit-overlay, .pit-label, etc.)
+  // so React's style prop never overrides what AnimeJS sets
   useEffect(() => {
     if (!driverLayout.current) return;
     const c = driverLayout.current;
 
     pitStatusMap.forEach((status, dn) => {
       if (prevPitRef.current.get(dn) === status) return;
+
       const bg = c.querySelector<HTMLElement>(`[data-pit-bg="${dn}"]`);
       const label = c.querySelector<HTMLElement>(`[data-pit-label="${dn}"]`);
-      const time = c.querySelector<HTMLElement>(`[data-pit-time="${dn}"]`);
+      const gapText = c.querySelector<HTMLElement>(`[data-gap-text="${dn}"]`);
+      const pitInline = c.querySelector<HTMLElement>(
+        `[data-pit-inline="${dn}"]`,
+      );
 
       if (status === "pitting") {
+        const tl = createTimeline({ defaults: { ease: "outQuart" } });
         if (bg)
-          animate(bg, {
-            backgroundColor: ["rgba(255,214,0,0)", "rgba(255,214,0,0.22)"],
-            duration: 580,
-            ease: "outQuart",
-          });
+          tl.add(
+            bg,
+            {
+              backgroundColor: ["rgba(255,185,0,0)", "rgba(255,185,0,0.30)"],
+              duration: 550,
+            },
+            0,
+          );
         if (label) {
-          animate(label, { opacity: [0, 1], duration: 120, ease: "outQuart" });
-          animate(label, {
-            opacity: [1, 0],
-            duration: 920,
-            delay: 520,
-            ease: "inQuart",
-          });
+          tl.add(
+            label,
+            {
+              opacity: [0, 1],
+              y: [14, 0],
+              scale: [0.85, 1],
+              duration: 280,
+              ease: "outBack(2.5)",
+            },
+            200,
+          );
+          tl.add(
+            label,
+            { opacity: [1, 0], y: [0, -8], duration: 380, ease: "inQuart" },
+            2000,
+          );
         }
-        if (time) animate(time, { opacity: [1, 0], duration: 100 });
+        // ensure pit-inline hidden while in pit
+        if (pitInline) tl.add(pitInline, { opacity: 0, duration: 120 }, 0);
       } else if (status === "just_out") {
+        const tl = createTimeline({ defaults: { ease: "outCubic" } });
         if (bg)
-          animate(bg, {
-            backgroundColor: ["rgba(255,214,0,0.22)", "rgba(34,197,94,0.2)"],
-            duration: 750,
-            delay: 849,
-            ease: "outQuart",
-          });
-        if (label) animate(label, { opacity: [1, 0], duration: 150 });
-        if (time)
-          animate(time, {
-            opacity: [0, 1],
-            y: [5, 0],
-            duration: 880,
-            ease: "outBack(1.5)",
-          });
+          tl.add(
+            bg,
+            {
+              backgroundColor: ["rgba(255,185,0,0.30)", "rgba(34,197,94,0.20)"],
+              duration: 750,
+            },
+            0,
+          );
+        if (label) tl.add(label, { opacity: [1, 0], duration: 150 }, 0);
+
+        // Crossfade gap → pit duration, auto-revert after 5s
+        if (gapText) tl.add(gapText, { opacity: [1, 0], duration: 200 }, 0);
+        if (pitInline) {
+          tl.add(
+            pitInline,
+            { opacity: [0, 1], y: [6, 0], duration: 400, ease: "outBack(1.5)" },
+            200,
+          );
+          tl.add(
+            pitInline,
+            { opacity: [1, 0], duration: 280, ease: "inQuad" },
+            5000,
+          );
+        }
+        if (gapText)
+          tl.add(
+            gapText,
+            { opacity: [0, 1], duration: 350, ease: "outQuad" },
+            5180,
+          );
       }
     });
 
-    // Drivers that cleared pit status — fade everything out
+    // Drivers leaving pit status — restore gap text, clear pit inline
     prevPitRef.current.forEach((_, dn) => {
       if (pitStatusMap.has(dn)) return;
       const bg = c.querySelector<HTMLElement>(`[data-pit-bg="${dn}"]`);
-      const time = c.querySelector<HTMLElement>(`[data-pit-time="${dn}"]`);
+      const gapText = c.querySelector<HTMLElement>(`[data-gap-text="${dn}"]`);
+      const pitInline = c.querySelector<HTMLElement>(
+        `[data-pit-inline="${dn}"]`,
+      );
       if (bg)
         animate(bg, {
-          backgroundColor: ["rgba(34,197,94,0.2)", "rgba(0,0,0,0)"],
-          duration: 700,
+          backgroundColor: ["rgba(34,197,94,0.20)", "rgba(0,0,0,0)"],
+          duration: 800,
           ease: "inQuart",
         });
-      if (time) animate(time, { opacity: [1, 0], duration: 250 });
+      if (gapText) animate(gapText, { opacity: 1, duration: 200 });
+      if (pitInline) animate(pitInline, { opacity: 0, duration: 200 });
     });
 
     prevPitRef.current = new Map(pitStatusMap);
   });
 
-  // Overtake row flash: green for attacker, red for defender
+  // Overtake flash — createTimeline for attacker + defender
   useEffect(() => {
     if (!driverLayout.current || !recentOvertakes) return;
     const c = driverLayout.current;
 
-    // First mount — skip historical events, just calibrate the pointer
     if (prevOvertakesLenRef.current === -1) {
       prevOvertakesLenRef.current = recentOvertakes.length;
       return;
@@ -298,7 +494,6 @@ export default function DriverTable({
     if (newOvertakes.length === 0) return;
 
     newOvertakes.forEach((ev) => {
-      // Attacker — green sweep
       const atkBg = c.querySelector<HTMLElement>(
         `[data-overtake-bg="${ev.overtakingDriver}"]`,
       );
@@ -306,33 +501,42 @@ export default function DriverTable({
         `[data-pass-label="${ev.overtakingDriver}"]`,
       );
       if (atkBg) {
-        animate(atkBg, {
-          backgroundColor: [
-            "rgba(0,0,0,0)",
-            "rgba(34,197,94,0.3)",
-            "rgba(0,0,0,0)",
-          ],
-          duration: 1600,
-          ease: "inOut(2)",
-        });
+        const tl = createTimeline();
+        tl.add(
+          atkBg,
+          {
+            backgroundColor: ["rgba(0,0,0,0)", "rgba(34,197,94,0.26)"],
+            duration: 300,
+            ease: "outQuart",
+          },
+          0,
+        );
+        tl.add(
+          atkBg,
+          {
+            backgroundColor: ["rgba(34,197,94,0.26)", "rgba(0,0,0,0)"],
+            duration: 1100,
+            ease: "inCubic",
+          },
+          900,
+        );
       }
       if (passLabel) {
         animate(passLabel, {
           opacity: [0, 1],
-          y: [4, 0],
-          duration: 200,
-          ease: "outExpo",
+          x: [-14, 0],
+          duration: 220,
+          ease: "outBack(2)",
         });
         animate(passLabel, {
           opacity: [1, 0],
-          y: [0, -4],
-          duration: 200,
-          delay: 800,
+          x: [0, 8],
+          duration: 260,
+          delay: 950,
           ease: "inQuart",
         });
       }
 
-      // Defender — red sweep
       const defBg = c.querySelector<HTMLElement>(
         `[data-overtake-bg="${ev.overtakenDriver}"]`,
       );
@@ -340,104 +544,114 @@ export default function DriverTable({
         `[data-lost-label="${ev.overtakenDriver}"]`,
       );
       if (defBg) {
-        animate(defBg, {
-          backgroundColor: [
-            "rgba(0,0,0,0)",
-            "rgba(239,68,68,0.3)",
-            "rgba(0,0,0,0)",
-          ],
-          duration: 1600,
-          ease: "inOut(2)",
-        });
+        const tl = createTimeline();
+        tl.add(
+          defBg,
+          {
+            backgroundColor: ["rgba(0,0,0,0)", "rgba(239,68,68,0.26)"],
+            duration: 300,
+            ease: "outQuart",
+          },
+          0,
+        );
+        tl.add(
+          defBg,
+          {
+            backgroundColor: ["rgba(239,68,68,0.26)", "rgba(0,0,0,0)"],
+            duration: 1100,
+            ease: "inCubic",
+          },
+          900,
+        );
       }
       if (lostLabel) {
         animate(lostLabel, {
           opacity: [0, 1],
-          y: [-4, 0],
-          duration: 200,
-          ease: "outExpo",
+          x: [14, 0],
+          duration: 220,
+          ease: "outBack(2)",
         });
         animate(lostLabel, {
           opacity: [1, 0],
-          y: [0, 4],
-          duration: 200,
-          delay: 800,
+          x: [0, -8],
+          duration: 260,
+          delay: 950,
           ease: "inQuart",
         });
       }
     });
   }, [recentOvertakes]);
 
-  // DRS strip: sweeps in when drsActive, sweeps out when not
+  // DRS strip — sweep in + CSS pulse class; sweep out + class removal
   useEffect(() => {
     if (!driverLayout.current) return;
     const c = driverLayout.current;
     const prev = prevDrsRef.current;
 
+    const revealStrip = (strip: HTMLElement) => {
+      strip.classList.remove("drs-strip-active");
+      animate(strip, {
+        opacity: [0, 1],
+        scaleX: [0, 1],
+        duration: 450,
+        ease: "outExpo",
+        onComplete: () => strip.classList.add("drs-strip-active"),
+      });
+    };
+    const hideStrip = (strip: HTMLElement) => {
+      strip.classList.remove("drs-strip-active");
+      animate(strip, {
+        opacity: [1, 0],
+        scaleX: [1, 0],
+        duration: 320,
+        ease: "inQuart",
+      });
+    };
+
     if (drsActive && !prev.active && drsDriver) {
       const strip = c.querySelector<HTMLElement>(
         `[data-drs-strip="${drsDriver}"]`,
       );
-      if (strip)
-        animate(strip, {
-          opacity: [0, 1],
-          scaleX: [0, 1],
-          duration: 380,
-          ease: "outExpo",
-        });
+      if (strip) revealStrip(strip);
     }
 
     if (!drsActive && prev.active) {
       const dn = prev.driver ?? drsDriver;
       if (dn) {
         const strip = c.querySelector<HTMLElement>(`[data-drs-strip="${dn}"]`);
-        if (strip)
-          animate(strip, {
-            opacity: [1, 0],
-            scaleX: [1, 0],
-            duration: 300,
-            ease: "inQuart",
-          });
+        if (strip) hideStrip(strip);
       }
     }
 
-    // Driver switched while DRS still active
     if (drsActive && prev.active && prev.driver && prev.driver !== drsDriver) {
-      const oldStrip = c.querySelector<HTMLElement>(
+      const old = c.querySelector<HTMLElement>(
         `[data-drs-strip="${prev.driver}"]`,
       );
-      if (oldStrip) animate(oldStrip, { opacity: [1, 0], duration: 180 });
+      if (old) hideStrip(old);
       if (drsDriver) {
-        const newStrip = c.querySelector<HTMLElement>(
+        const next = c.querySelector<HTMLElement>(
           `[data-drs-strip="${drsDriver}"]`,
         );
-        if (newStrip)
-          animate(newStrip, {
-            opacity: [0, 1],
-            scaleX: [0, 1],
-            duration: 380,
-            ease: "outExpo",
-          });
+        if (next) revealStrip(next);
       }
     }
 
     prevDrsRef.current = { active: !!drsActive, driver: drsDriver };
   }, [drsActive, drsDriver]);
 
-  // Initial stagger slide-in when rows first render
+  // Initial stagger slide-in with spring physics
   useEffect(() => {
     if (!driverLayout.current || hasAnimated.current || positions.length === 0)
       return;
-    // hasAnimated.current = true;
+    hasAnimated.current = true;
     const s = createScope({ root: driverLayout.current });
     s.add(() => {
-      animate(".driver-row", {
+      animate(".driver-row:not(.driver-header-row)", {
         opacity: [0, 1],
-        x: [-52, 0],
-        delay: stagger(35),
-        duration: 600,
-        ease: cubicBezier(0.726, -0.988, 0, 2),
-        // loop: true,
+        x: [-48, 0],
+        delay: stagger(40, { ease: "outQuart" }),
+        duration: 520,
+        ease: spring({ stiffness: 200, damping: 18, mass: 2.2, velocity: 12 }),
       });
     });
     return () => s.revert();
@@ -446,6 +660,21 @@ export default function DriverTable({
   return (
     <div className="h-full flex flex-col" style={{ background: "transparent" }}>
       <div ref={driverLayout} className="flex-1 overflow-y-auto min-h-0">
+        <div
+          className="driver-row driver-header-row"
+          style={{ padding: "4px 10px 4px 14px" }}
+        >
+          <div />
+          <div />
+          <div className="driver-col-label">DRIVER</div>
+          <div className="driver-col-label" style={{ textAlign: "right" }}>
+            GAP
+          </div>
+          <div className="driver-detail driver-col-label justify-end">INT</div>
+          <div className="driver-detail driver-col-label justify-end">LAP</div>
+          <div className="driver-detail driver-col-label justify-end">AGE</div>
+          <div className="driver-detail driver-col-label justify-end">PIT</div>
+        </div>
         {positions.map((pos, idx) => {
           const driver = driverMap.get(pos.driver_number);
           const interval = intervalMap.get(pos.driver_number);
@@ -470,182 +699,232 @@ export default function DriverTable({
           const lapDuration = lastLap?.lap_duration ?? null;
           const isBestForDriver =
             lapDuration !== null && lapDuration === bestLap;
-
           const pitDuration = lastPitMap.get(pos.driver_number)?.pit_duration;
+          const hasDrs = drsDriver === pos.driver_number && drsActive;
+
+          // Pit prediction — compare tyre age against expected compound life.
+          // >80% = PIT SOON (orange), >100% = PIT NOW (red pulsing).
+          const compound = stint?.compound ?? "UNKNOWN";
+          const expectedLife = TYRE_LIFE_LAPS[compound] ?? 30;
+          const tyreWear =
+            tyreAge !== null && !isPitting && !isJustOut
+              ? tyreAge / expectedLife
+              : 0;
+          const pitSoon = tyreWear > 0.8 && tyreWear <= 1.0;
+          const pitNow = tyreWear > 1.0;
+
+          // Up to 2 badges: one status/prediction + one secondary (DRS or FL)
+          const activeBadges: BadgeVariant[] = [];
+          if (isPitting) activeBadges.push("pit");
+          else if (isJustOut) activeBadges.push("out");
+          else if (pitNow) activeBadges.push("box-now");
+          else if (pitSoon) activeBadges.push("box-soon");
+          if (hasDrs && activeBadges.length < 2) activeBadges.push("drs");
+          if (isFastestLap && activeBadges.length < 2) activeBadges.push("fl");
 
           return (
             <div
               key={pos.driver_number}
               onClick={() => onSelectDriver(pos.driver_number)}
-              className={`driver-row relative px-3 cursor-pointer transition-colors duration-150 ${change === "up" ? "animate-flash-up" : ""} ${change === "down" ? "animate-flash-down" : ""}`}
+              className={`driver-row relative cursor-pointer ${
+                change === "up" ? "animate-flash-up" : ""
+              } ${change === "down" ? "animate-flash-down" : ""}`}
               style={{
-                paddingTop: 8,
-                paddingBottom: 8,
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                padding: "5px 10px 5px 14px",
+                borderBottom: "1px solid rgba(255,255,255,0.055)",
                 isolation: "isolate",
                 background: isSelected
-                  ? `linear-gradient(90deg, ${teamColor}22 0%, rgba(10,12,18,0.7) 60%)`
+                  ? `linear-gradient(90deg, ${teamColor}20 0%, rgba(8,10,16,0.85) 60%)`
                   : isLeader
-                    ? "linear-gradient(90deg, rgba(255,214,0,0.06) 0%, transparent 50%)"
-                    : "rgba(6,8,12,0.25)",
+                    ? "linear-gradient(90deg, rgba(255,214,0,0.055) 0%, transparent 55%)"
+                    : idx % 2 === 0
+                      ? "rgba(255,255,255,0.012)"
+                      : "transparent",
               }}
             >
-              {/* Pit colour overlay — z-index -1 sits between row bg and content */}
+              {/* ── Animated overlays ──────────────────────────────────────
+                  Initial state set via CSS classes (.pit-overlay, etc.)
+                  so React's style prop never fights AnimeJS mutations. */}
+
               <div
                 data-pit-bg={pos.driver_number}
-                className="absolute inset-0 pointer-events-none"
-                style={{ zIndex: -1, backgroundColor: "rgba(0,0,0,0)" }}
+                className="pit-overlay absolute inset-0 pointer-events-none"
+                style={{ zIndex: -1 }}
               />
-
-              {/* "PITTING" flash — appears for ~1s then fades */}
-              <div
-                data-pit-label={pos.driver_number}
-                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{ zIndex: 10, opacity: 0 }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: 10,
-                    fontWeight: 900,
-                    letterSpacing: "0.3em",
-                    color: "#fff",
-                  }}
-                >
-                  PITTING
-                </span>
-              </div>
-
-              {/* Pit stop time — fades in when just_out */}
-              <div
-                data-pit-time={pos.driver_number}
-                className="absolute right-3 inset-y-0 flex items-center pointer-events-none"
-                style={{ zIndex: 10, opacity: 0 }}
-              >
-                {pitDuration != null && (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-data)",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "#fff",
-                      letterSpacing: "-0.02em",
-                    }}
-                  >
-                    {pitDuration.toFixed(1)}s
-                  </span>
-                )}
-              </div>
-
-              {/* Overtake flash overlay — green (attacker) or red (defender) */}
               <div
                 data-overtake-bg={pos.driver_number}
-                className="absolute inset-0 pointer-events-none"
-                style={{ zIndex: -1, backgroundColor: "rgba(0,0,0,0)" }}
+                className="overtake-overlay absolute inset-0 pointer-events-none"
+                style={{ zIndex: -1 }}
               />
 
-              {/* "PASS" badge — attacker row */}
+              {/* Tyre wear strip — top of row, width = wear %, colour shifts red near window */}
+              {tyreAge !== null && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 pointer-events-none h-full"
+                  style={{ zIndex: -1 }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${Math.min(tyreWear * 100, 100)}%`,
+                      background: pitNow
+                        ? "rgba(247, 33, 17, 0.5)"
+                        : pitSoon
+                          ? "linear-gradient(90deg, rgba(247, 75, 17, 0.2), rgba(247, 33, 17, 0.3)"
+                          : tyreWear > 0.6
+                            ? "linear-gradient(90deg,rgba(247, 152, 17, 0.2),rgba(245, 111, 22, 0.3)"
+                            : "rgba(255,255,255,0.1)",
+                      transition: "width 2s ease, background 1.2s ease",
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* "PIT STOP" flash — big + dramatic, animated by createTimeline */}
+              <div
+                data-pit-label={pos.driver_number}
+                className="pit-label absolute inset-0 flex items-center justify-center pointer-events-none"
+                style={{ zIndex: 10 }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 2,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 13,
+                      fontWeight: 900,
+                      letterSpacing: "0.5em",
+                      color: "#ffb800",
+                      textShadow:
+                        "0 0 30px rgba(255,185,0,1), 0 0 60px rgba(255,185,0,0.5)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    PIT STOP
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 7,
+                      fontWeight: 700,
+                      letterSpacing: "0.35em",
+                      color: "rgba(255,185,0,0.65)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    IN LANE
+                  </span>
+                </div>
+              </div>
+
+              {/* Pit stop time badge — animated in on just_out */}
+              {/* <div */}
+              {/*   data-pit-time={pos.driver_number} */}
+              {/*   className="pit-time absolute right-3 inset-y-0 flex items-center pointer-events-none" */}
+              {/*   style={{ zIndex: 10 }} */}
+              {/* > */}
+              {/*   {pitDuration != null && ( */}
+              {/*     <span */}
+              {/*       style={{ */}
+              {/*         fontFamily: "var(--font-data)", */}
+              {/*         fontSize: 12, */}
+              {/*         fontWeight: 700, */}
+              {/*         color: "#22c55e", */}
+              {/*         letterSpacing: "-0.03em", */}
+              {/*         textShadow: "0 0 10px rgba(34,197,94,0.6)", */}
+              {/*       }} */}
+              {/*     > */}
+              {/*       {pitDuration.toFixed(1)}s */}
+              {/*     </span> */}
+              {/*   )} */}
+              {/* </div> */}
+
+              {/* PASS badge — attacker */}
               <div
                 data-pass-label={pos.driver_number}
-                className="absolute right-2 inset-y-0 flex items-center pointer-events-none"
-                style={{ zIndex: 10, opacity: 0 }}
+                className="pass-label absolute right-2 inset-y-0 flex items-center pointer-events-none"
+                style={{ zIndex: 10 }}
               >
-                <span
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: 9,
-                    fontWeight: 900,
-                    color: "#22c55e",
-                    letterSpacing: "0.25em",
-                  }}
-                >
-                  PASS
-                </span>
+                <StatusBadge variant="pass">PASS</StatusBadge>
               </div>
 
-              {/* "LOST" badge — defender row */}
+              {/* LOST badge — defender */}
               <div
                 data-lost-label={pos.driver_number}
-                className="absolute right-2 inset-y-0 flex items-center pointer-events-none"
-                style={{ zIndex: 10, opacity: 0 }}
+                className="lost-label absolute right-2 inset-y-0 flex items-center pointer-events-none"
+                style={{ zIndex: 10 }}
               >
-                <span
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: 9,
-                    fontWeight: 900,
-                    color: "#ef4444",
-                    letterSpacing: "0.25em",
-                  }}
-                >
-                  LOST
-                </span>
+                <StatusBadge variant="lost">LOST</StatusBadge>
               </div>
 
-              {/* DRS strip — sweeps in from left at row bottom when DRS active */}
+              {/* DRS strip — sweep-animated, CSS-pulsed when active */}
               <div
                 data-drs-strip={pos.driver_number}
-                className="absolute bottom-0 left-0 right-0 pointer-events-none"
+                className="drs-strip absolute bottom-0 left-4 right-0 pointer-events-none"
                 style={{
                   height: 2,
-                  backgroundColor: "#22c55e",
-                  boxShadow: "0 0 8px rgba(34,197,94,0.9)",
+                  background:
+                    "linear-gradient(90deg, rgba(0,255,136,0.4) 0%, #00ff88 35%, rgba(0,255,136,0.5) 100%)",
                   zIndex: 8,
-                  opacity: 0,
-                  transformOrigin: "left center",
                 }}
               />
 
-              {/* Left team color strip */}
+              {/* Left team color rail — always visible */}
               <div
-                className="absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-300"
+                className="absolute left-0 top-0 bottom-0"
                 style={{
-                  background: isSelected ? teamColor : "transparent",
-                  boxShadow: isSelected ? `0 0 8px ${teamColor}` : "none",
+                  width: isSelected ? 3 : 2,
+                  background: teamColor,
+                  boxShadow: isSelected
+                    ? `0 0 10px ${teamColor}90, 0 0 22px ${teamColor}40`
+                    : "none",
+                  transition: "width 0.25s ease, box-shadow 0.3s ease",
                 }}
               />
 
-              {/* Position + change arrow */}
-              <div className="flex items-center gap-0.5 pl-1">
+              {/* Position number + direction arrow */}
+              <div className="flex items-center gap-0.5 pl-1.5">
                 <PositionNumber pos={pos.position} change={change} />
                 {change === "up" && (
                   <span
-                    style={{ color: "#22c55e", fontSize: 7, lineHeight: 1 }}
+                    style={{ color: "#22c55e", fontSize: 6, lineHeight: 1 }}
                   >
                     ▲
                   </span>
                 )}
                 {change === "down" && (
                   <span
-                    style={{ color: "#ef4444", fontSize: 7, lineHeight: 1 }}
+                    style={{ color: "#ef4444", fontSize: 6, lineHeight: 1 }}
                   >
                     ▼
                   </span>
                 )}
               </div>
 
-              {/* Tyre compound icon */}
+              {/* Tyre compound badge — SVG ring shows remaining tyre life */}
               <div className="flex items-center justify-center">
                 {tyre ? (
-                  <span
-                    className="flex items-center justify-center rounded-full font-black"
-                    style={{
-                      width: 26,
-                      height: 26,
-                      background: tyre.bg,
-                      color: tyre.text,
-                      fontFamily: "var(--font-display)",
-                      fontSize: 12,
-                    }}
-                  >
-                    {tyre.label}
-                  </span>
+                  <TyreBadge
+                    tyre={tyre}
+                    wearFraction={Math.min(tyreWear, 1)}
+                    hasWearData={tyreAge !== null}
+                    isPitting={isPitting}
+                    isJustOut={isJustOut}
+                    pitSoon={pitSoon}
+                    pitNow={pitNow}
+                  />
                 ) : (
                   <span
                     style={{
                       fontFamily: "var(--font-data)",
-                      fontSize: 11,
-                      fontWeight: 800,
+                      fontSize: 10,
+                      fontWeight: 700,
                       color: teamColor,
                     }}
                   >
@@ -654,67 +933,78 @@ export default function DriverTable({
                 )}
               </div>
 
-              {/* Driver name */}
-              <div className="flex items-center min-w-0">
+              {/* Driver name + single highest-priority badge */}
+              <div className="flex items-center gap-1 min-w-0 overflow-hidden">
                 <span
-                  className="truncate"
+                  className="truncate flex-shrink-0"
                   style={{
                     fontFamily: "var(--font-display)",
                     fontWeight: 700,
                     fontSize: 13,
+                    letterSpacing: "0.025em",
                     color: isLeader
                       ? "#ffd600"
                       : isSelected
-                        ? "#fff"
-                        : "#e5e7eb",
+                        ? "#ffffff"
+                        : "#d1d5db",
                   }}
                 >
                   {driver?.name_acronym ?? "???"}
                 </span>
+                {activeBadges.map((v) => (
+                  <StatusBadge key={v} variant={v} />
+                ))}
               </div>
 
-              {/* Tyre age [detail] — compound is already the icon */}
-              <div className="driver-detail justify-end">
-                {tyreAge !== null && (
+              {/* Gap to leader — dual display: gap normally, pit duration briefly on exit */}
+              <div className="text-right" style={{ position: "relative" }}>
+                <span
+                  data-gap-text={pos.driver_number}
+                  style={{
+                    fontFamily: "var(--font-data)",
+                    fontSize: 11,
+                    fontWeight: isLeader ? 700 : 400,
+                    letterSpacing: "-0.03em",
+                    color: isLeader ? "#ffd600" : "#4b5563",
+                    display: "block",
+                  }}
+                >
+                  {isLeader
+                    ? "LEAD"
+                    : formatGap(interval?.gap_to_leader ?? null)}
+                </span>
+                {pitDuration != null && !isLeader && (
                   <span
+                    data-pit-inline={pos.driver_number}
+                    className="pit-inline"
                     style={{
-                      fontFamily: "var(--font-data)",
-                      fontSize: 10,
-                      color: tyreAge > 20 ? "#f97316" : "#3d4455",
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
                     }}
                   >
-                    {tyreAge}
+                    {pitDuration.toFixed(1)}s
                   </span>
                 )}
               </div>
 
-              {/* Gap to leader */}
-              <div
-                className="text-right"
-                style={{
-                  fontFamily: "var(--font-data)",
-                  fontSize: 11,
-                  fontWeight: isLeader ? 700 : 400,
-                  color: isLeader ? "#ffd600" : "#6b7280",
-                }}
-              >
-                {isLeader ? "LDR" : formatGap(interval?.gap_to_leader ?? null)}
-              </div>
-
-              {/* Interval [detail] */}
+              {/* Interval [expanded] */}
               <div className="driver-detail justify-end">
                 <span
                   style={{
                     fontFamily: "var(--font-data)",
                     fontSize: 10,
-                    color: "#4b5563",
+                    color: "#6b7280",
+                    letterSpacing: "-0.02em",
                   }}
                 >
                   {isLeader ? "—" : formatInterval(interval?.interval ?? null)}
                 </span>
               </div>
 
-              {/* Last lap [detail] */}
+              {/* Last lap [expanded] */}
               <div className="driver-detail justify-end">
                 <span
                   style={{
@@ -725,7 +1015,8 @@ export default function DriverTable({
                       ? "#c084fc"
                       : isBestForDriver
                         ? "#22c55e"
-                        : "#9ca3af",
+                        : "#6b7280",
+                    letterSpacing: "-0.02em",
                   }}
                 >
                   {lastLap?.is_pit_out_lap ? (
@@ -735,6 +1026,7 @@ export default function DriverTable({
                         fontFamily: "var(--font-display)",
                         fontWeight: 700,
                         fontSize: 9,
+                        letterSpacing: "0.1em",
                       }}
                     >
                       OUT
@@ -745,16 +1037,37 @@ export default function DriverTable({
                 </span>
               </div>
 
-              {/* Pit count [detail] */}
+              {/* Tyre age [expanded] */}
+              <div className="driver-detail justify-end">
+                {tyreAge !== null && (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-data)",
+                      fontSize: 10,
+                      color:
+                        tyreAge > 28
+                          ? "#f97316"
+                          : tyreAge > 16
+                            ? "#eab308"
+                            : "#6b7280",
+                    }}
+                  >
+                    {tyreAge}
+                  </span>
+                )}
+              </div>
+
+              {/* Pit duration [expanded] — always shows last stop time once available */}
               <div className="driver-detail justify-end">
                 <span
                   style={{
                     fontFamily: "var(--font-data)",
                     fontSize: 10,
-                    color: pitCount > 0 ? "#9ca3af" : "#2a2d35",
+                    letterSpacing: "-0.02em",
+                    color: isJustOut ? "#22c55e" : "#6b7280",
                   }}
                 >
-                  {pitCount || "–"}
+                  {pitDuration != null ? `${pitDuration.toFixed(1)}s` : "—"}
                 </span>
               </div>
             </div>
@@ -768,10 +1081,11 @@ export default function DriverTable({
                 fontFamily: "var(--font-display)",
                 fontSize: 11,
                 color: "#2a2d35",
-                letterSpacing: "0.2em",
+                letterSpacing: "0.28em",
+                textTransform: "uppercase",
               }}
             >
-              WAITING FOR DATA
+              Waiting for data
             </span>
           </div>
         )}

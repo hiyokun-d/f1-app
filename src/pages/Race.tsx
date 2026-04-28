@@ -1,7 +1,6 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useRaceData } from "../hooks/useRaceData";
-import { useCarData } from "../hooks/useCarData";
 import { useTrackMap } from "../hooks/useTrackMap";
 import { useRaceReplay } from "../hooks/useRaceReplay";
 import { openF1 } from "../api/openf1";
@@ -59,12 +58,6 @@ export default function Race() {
   const effectiveDriver =
     selectedDriver ?? race.positions[0]?.driver_number ?? null;
 
-  const { latest: carLatest, history: carHistory } = useCarData(
-    key,
-    effectiveDriver,
-    sessionDateEnd,
-  );
-
   const driverNumbers = useMemo(
     () => race.drivers.map((d) => d.driver_number),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,6 +86,34 @@ export default function Race() {
     }
     return Object.values(map).sort((a, b) => a.position - b.position);
   }, [replayISO, race.allPositions, race.positions]);
+
+  // Derive position changes from replayPositions so the rail animation works in replay
+  const prevReplayPositionsRef = useRef<Position[]>([]);
+  const [replayPositionChanges, setReplayPositionChanges] = useState<
+    Record<number, "up" | "down">
+  >({});
+  const changeClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const prev = prevReplayPositionsRef.current;
+    if (prev.length > 0) {
+      const prevMap = new Map(prev.map((p) => [p.driver_number, p.position]));
+      const changes: Record<number, "up" | "down"> = {};
+      for (const p of replayPositions) {
+        const old = prevMap.get(p.driver_number);
+        if (old !== undefined && old !== p.position)
+          changes[p.driver_number] = p.position < old ? "up" : "down";
+      }
+      if (Object.keys(changes).length > 0) {
+        if (changeClearTimer.current) clearTimeout(changeClearTimer.current);
+        setReplayPositionChanges(changes);
+        changeClearTimer.current = setTimeout(
+          () => setReplayPositionChanges({}),
+          2000,
+        );
+      }
+    }
+    prevReplayPositionsRef.current = replayPositions;
+  }, [replayPositions]);
 
   const replayIntervals = useMemo((): Interval[] => {
     if (!replayISO) return race.intervals;
@@ -164,8 +185,6 @@ export default function Race() {
         (d) => d.driver_number === activeBannerOvertake.overtakenDriver,
       )
     : null;
-
-  const drsActive = (carLatest?.drs ?? 0) >= 10;
 
   const selectedDriverObj = race.drivers.find(
     (d) => d.driver_number === effectiveDriver,
@@ -286,19 +305,19 @@ export default function Race() {
         bottom={panelBottom}
         width={leftW}
         onWidthChange={setLeftW}
+        sessionKey={key}
+        sessionDateEnd={sessionDateEnd}
         positions={replayPositions}
         drivers={race.drivers}
         intervals={replayIntervals}
         laps={replayLaps}
         stints={replayStints}
         pits={replayPits}
-        positionChanges={race.positionChanges}
+        positionChanges={replayPositionChanges}
         selectedDriver={effectiveDriver}
         onSelectDriver={setSelectedDriver}
         hasError={!!race.error}
         recentOvertakes={race.overtakes}
-        drsDriver={effectiveDriver}
-        drsActive={drsActive}
       />
 
       {/* ── Layer 2: Right panel — Telemetry + Radio ─────────────────── */}

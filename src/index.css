@@ -468,6 +468,22 @@ body,
 
 /* ── Animation utility classes ───────────────────────────────────── */
 
+.rail-arrow { opacity: 0; }
+
+.rail-drs {
+	opacity: 0;
+	transform: scaleY(0);
+	transform-origin: bottom center;
+	background: #00ff88;
+}
+.rail-drs-active {
+	animation: rail-drs-breathe 1.6s ease-in-out infinite;
+}
+@keyframes rail-drs-breathe {
+	0%, 100% { opacity: 1; }
+	50%       { opacity: 0.4; }
+}
+
 .animate-flash-up {
 	animation: flash-up 2s ease forwards;
 }

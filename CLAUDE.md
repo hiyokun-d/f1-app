@@ -55,11 +55,35 @@ All animations use AnimeJS. Key patterns in this codebase:
 
 `DriverTable` runs its pit/overtake/DRS animation effects on every render (no dep array or length-based dep) and diffs against `prevPitRef`/`prevOvertakesLenRef`/`prevDrsRef` to fire only on transitions.
 
+**React/AnimeJS ownership rule**: Never put animated CSS properties in React's `style` prop. Use a CSS class for base/resting state (e.g. `.rail-arrow { opacity: 0 }`) and let AnimeJS own the inline style. If React's `style={}` includes the same property, every re-render resets what AnimeJS set.
+
+### Left-rail event system (DriverTable)
+
+Each driver row has a `data-team-rail` div (2px wide, team color) that expands temporarily to signal events. AnimeJS owns `width`. Never set width in React style prop.
+
+| `data-*` attribute | Event | Color | Animation |
+|---|---|---|---|
+| `data-rail-pos` | Position change ▲▼ | green/red | expand 40px, icon fade in at 80ms, out at 1320ms, shrink at 1500ms |
+| `data-rail-pit` | Pit in lane P | amber | (wired up, not yet animated — TODO) |
+| `data-rail-out` | Pit exit ↑ | green | (wired up, not yet animated — TODO) |
+| `data-rail-fl` | Fastest lap ★ | purple | expand 22px, star fades, shrink at 3000ms |
+| `data-rail-drs` | DRS open | green sweep | scaleY 0→1 from bottom, CSS breathe pulse while active |
+
+Rail contents stack: team-color bg → `rgba(0,0,0,0.4)` dark overlay → DRS sweep → icons (icons always on top, dark textShadow ensures readability on any team color).
+
+### Position changes — replay vs live
+
+`race.positionChanges` (from `useRaceData`) only fires during live polling. For replay mode, `Race.tsx` derives `replayPositionChanges` by diffing `replayPositions` on each update and passes it as `positionChanges` to `StandingsPanel` → `DriverTable`. The clear timer runs for 2000ms.
+
+### FLIP row reorder animation
+
+When `positionChanges` has entries, `DriverTable` delays `setDisplayPositions` by 400ms (shows rail/arrow first). Before the delay fires, it snapshots each row's `getBoundingClientRect().top` into `rowPositionsRef`. A `useLayoutEffect` on `displayPositions` reads the new positions, computes `delta = prevTop - newTop`, and animates `translateY: [delta, 0]` so rows appear to slide from their old position.
+
 ### CSS grid layout
 
 `index.css` owns the driver table grid. Two modes toggled by `.driver-table-expanded` on the container:
-- Compact: `28px 42px 1fr 72px` (pos, tyre, name, gap)
-- Expanded: `28px 42px 1fr 28px 68px 56px 72px 26px` (+ tyre age, interval, last lap, pit count)
+- Compact: `28px 38px 1fr 76px` (pos, tyre, name, gap)
+- Expanded: `28px 38px 42px 62px 48px 58px 20px 42px` (+ gap, int, lap, age, pit_dur)
 
 Columns tagged `.driver-detail` are `display: none` until `.driver-table-expanded` is present.
 

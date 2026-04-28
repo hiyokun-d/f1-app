@@ -1,5 +1,12 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type React from "react";
+import { useCarData } from "../../hooks/useCarData";
 import type {
   Driver,
   Position,
@@ -26,6 +33,8 @@ import {
 import type { AutoLayout } from "animejs";
 
 interface Props {
+  sessionKey: number;
+  sessionDateEnd: string | null;
   positions: Position[];
   drivers: Driver[];
   intervals: Interval[];
@@ -36,8 +45,6 @@ interface Props {
   selectedDriver: number | null;
   onSelectDriver: (dn: number) => void;
   recentOvertakes?: OvertakeEvent[];
-  drsDriver?: number | null;
-  drsActive?: boolean;
 }
 
 const TYRE_COLORS: Record<string, { bg: string; text: string; label: string }> =
@@ -76,19 +83,76 @@ type BadgeVariant =
 
 const BADGE_CFG: Record<
   BadgeVariant,
-  { label: string; color: string; bg: string; border: string; pulse?: string; ls?: string }
+  {
+    label: string;
+    color: string;
+    bg: string;
+    border: string;
+    pulse?: string;
+    ls?: string;
+  }
 > = {
-  pit:      { label: "PIT",  color: "#ffb800", bg: "rgba(255,185,0,0.16)",   border: "rgba(255,185,0,0.32)" },
-  out:      { label: "OUT",  color: "#22c55e", bg: "rgba(34,197,94,0.14)",   border: "rgba(34,197,94,0.28)" },
-  fl:       { label: "FL",   color: "#c084fc", bg: "rgba(192,132,252,0.14)", border: "rgba(192,132,252,0.28)" },
-  drs:      { label: "DRS",  color: "#00ff88", bg: "rgba(0,255,136,0.1)",    border: "rgba(0,255,136,0.32)", pulse: "drs-badge-pulse 1.6s ease-in-out infinite" },
-  pass:     { label: "PASS", color: "#22c55e", bg: "rgba(34,197,94,0.14)",   border: "rgba(34,197,94,0.28)", ls: "0.3em" },
-  lost:     { label: "LOST", color: "#ef4444", bg: "rgba(239,68,68,0.14)",   border: "rgba(239,68,68,0.28)", ls: "0.3em" },
-  "box-soon": { label: "SOON", color: "#f97316", bg: "rgba(249,115,22,0.14)", border: "rgba(249,115,22,0.3)" },
-  "box-now":  { label: "BOX",  color: "#ef4444", bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.35)", pulse: "pit-now-pulse 1.1s ease-in-out infinite" },
+  pit: {
+    label: "PIT",
+    color: "#ffb800",
+    bg: "rgba(255,185,0,0.16)",
+    border: "rgba(255,185,0,0.32)",
+  },
+  out: {
+    label: "OUT",
+    color: "#22c55e",
+    bg: "rgba(34,197,94,0.14)",
+    border: "rgba(34,197,94,0.28)",
+  },
+  fl: {
+    label: "FL",
+    color: "#c084fc",
+    bg: "rgba(192,132,252,0.14)",
+    border: "rgba(192,132,252,0.28)",
+  },
+  drs: {
+    label: "DRS",
+    color: "#00ff88",
+    bg: "rgba(0,255,136,0.1)",
+    border: "rgba(0,255,136,0.32)",
+    pulse: "drs-badge-pulse 1.6s ease-in-out infinite",
+  },
+  pass: {
+    label: "PASS",
+    color: "#22c55e",
+    bg: "rgba(34,197,94,0.14)",
+    border: "rgba(34,197,94,0.28)",
+    ls: "0.3em",
+  },
+  lost: {
+    label: "LOST",
+    color: "#ef4444",
+    bg: "rgba(239,68,68,0.14)",
+    border: "rgba(239,68,68,0.28)",
+    ls: "0.3em",
+  },
+  "box-soon": {
+    label: "SOON",
+    color: "#f97316",
+    bg: "rgba(249,115,22,0.14)",
+    border: "rgba(249,115,22,0.3)",
+  },
+  "box-now": {
+    label: "BOX",
+    color: "#ef4444",
+    bg: "rgba(239,68,68,0.14)",
+    border: "rgba(239,68,68,0.35)",
+    pulse: "pit-now-pulse 1.1s ease-in-out infinite",
+  },
 };
 
-function StatusBadge({ variant, children }: { variant: BadgeVariant; children?: React.ReactNode }) {
+function StatusBadge({
+  variant,
+  children,
+}: {
+  variant: BadgeVariant;
+  children?: React.ReactNode;
+}) {
   const s = BADGE_CFG[variant];
   return (
     <span
@@ -258,6 +322,8 @@ function PositionNumber({
 }
 
 export default function DriverTable({
+  sessionKey,
+  sessionDateEnd,
   positions,
   drivers,
   intervals,
@@ -268,8 +334,6 @@ export default function DriverTable({
   selectedDriver,
   onSelectDriver,
   recentOvertakes,
-  drsDriver,
-  drsActive,
 }: Props) {
   const driverLayout = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
@@ -280,6 +344,17 @@ export default function DriverTable({
     active: boolean;
     driver: number | null | undefined;
   }>({ active: false, driver: null });
+  const pendingPosTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rowPositionsRef = useRef<Map<number, number>>(new Map());
+  const prevFastestLapRef = useRef<number | null>(null);
+
+  const [displayPositions, setDisplayPositions] =
+    useState<Position[]>(positions);
+
+  // DRS — owned here, not threaded from Race.tsx
+  const { latest: carLatest } = useCarData(sessionKey, selectedDriver, sessionDateEnd);
+  const drsActive = (carLatest?.drs ?? 0) >= 10;
+  const drsDriver = selectedDriver;
 
   const driverMap = new Map(drivers.map((d) => [d.driver_number, d]));
   const intervalMap = new Map(intervals.map((i) => [i.driver_number, i]));
@@ -346,6 +421,96 @@ export default function DriverTable({
         pitStatusMap.set(p.driver_number, "pitting");
     }
   });
+
+  // Rail animation + delayed row reorder
+  useEffect(() => {
+    if (pendingPosTimer.current) clearTimeout(pendingPosTimer.current);
+    const entries = Object.entries(positionChanges) as [
+      string,
+      "up" | "down",
+    ][];
+
+    if (entries.length > 0) {
+      const c = driverLayout.current;
+      if (c) {
+        entries.forEach(([dnStr]) => {
+          const rail = c.querySelector<HTMLElement>(
+            `[data-team-rail="${dnStr}"]`,
+          );
+          if (!rail) return;
+
+          const W = 40;
+          const tl = createTimeline();
+          tl.add(
+            rail,
+            {
+              width: [2, W],
+              duration: 200,
+              ease: spring({
+                stiffness: 208.1,
+                damping: 17.2,
+                mass: 2.3,
+                velocity: 14.2,
+              }),
+            },
+            0,
+          );
+          tl.add(
+            rail,
+            {
+              width: [W, 2],
+              duration: 480,
+              ease: spring({
+                stiffness: 208.1,
+                damping: 17.2,
+                mass: 2.3,
+                velocity: 14.2,
+              }),
+            },
+            1500,
+          );
+        });
+      }
+      // Snapshot row Y positions before reorder so FLIP can animate
+      pendingPosTimer.current = setTimeout(() => {
+        if (driverLayout.current) {
+          const snap = new Map<number, number>();
+          driverLayout.current
+            .querySelectorAll<HTMLElement>("[data-driver-row]")
+            .forEach((row) => {
+              const dn = row.getAttribute("data-driver-row");
+              if (dn) snap.set(Number(dn), row.getBoundingClientRect().top);
+            });
+          rowPositionsRef.current = snap;
+        }
+        setDisplayPositions(positions);
+      }, 400);
+    } else {
+      setDisplayPositions(positions);
+    }
+    return () => {
+      if (pendingPosTimer.current) clearTimeout(pendingPosTimer.current);
+    };
+  }, [positions, positionChanges]);
+
+  // FLIP — animate rows from their old Y to new Y after displayPositions reorder
+  useLayoutEffect(() => {
+    if (!driverLayout.current || rowPositionsRef.current.size === 0) return;
+    const c = driverLayout.current;
+    c.querySelectorAll<HTMLElement>("[data-driver-row]").forEach((row) => {
+      const dn = Number(row.getAttribute("data-driver-row"));
+      const prevTop = rowPositionsRef.current.get(dn);
+      if (prevTop === undefined) return;
+      const delta = prevTop - row.getBoundingClientRect().top;
+      if (Math.abs(delta) < 1) return;
+      animate(row, {
+        translateY: [delta, 0],
+        duration: 480,
+        ease: spring({ stiffness: 300, damping: 26, mass: 1 }),
+      });
+    });
+    rowPositionsRef.current = new Map();
+  }, [displayPositions]);
 
   // AnimeJS layout + ResizeObserver for compact/expanded breakpoint
   useEffect(() => {
@@ -579,65 +744,120 @@ export default function DriverTable({
           ease: "inQuart",
         });
       }
+
+      // Rail burst — both rows clash simultaneously
+      const atkRail = c.querySelector<HTMLElement>(
+        `[data-team-rail="${ev.overtakingDriver}"]`,
+      );
+      if (atkRail) {
+        const tl = createTimeline();
+        tl.add(atkRail, { width: [2, 28], duration: 140, ease: "outExpo" }, 0);
+        tl.add(
+          atkRail,
+          { width: [28, 2], duration: 700, ease: "outCubic" },
+          380,
+        );
+      }
+      const defRail = c.querySelector<HTMLElement>(
+        `[data-team-rail="${ev.overtakenDriver}"]`,
+      );
+      if (defRail) {
+        const tl = createTimeline();
+        tl.add(defRail, { width: [2, 28], duration: 140, ease: "outExpo" }, 0);
+        tl.add(
+          defRail,
+          { width: [28, 2], duration: 700, ease: "outCubic" },
+          380,
+        );
+      }
     });
   }, [recentOvertakes]);
 
-  // DRS strip — sweep in + CSS pulse class; sweep out + class removal
+  // DRS strip + rail — sweep in/out with CSS pulse while active
   useEffect(() => {
     if (!driverLayout.current) return;
     const c = driverLayout.current;
     const prev = prevDrsRef.current;
 
-    const revealStrip = (strip: HTMLElement) => {
-      strip.classList.remove("drs-strip-active");
-      animate(strip, {
-        opacity: [0, 1],
-        scaleX: [0, 1],
-        duration: 450,
-        ease: "outExpo",
-        onComplete: () => strip.classList.add("drs-strip-active"),
-      });
-    };
-    const hideStrip = (strip: HTMLElement) => {
-      strip.classList.remove("drs-strip-active");
-      animate(strip, {
-        opacity: [1, 0],
-        scaleX: [1, 0],
-        duration: 320,
-        ease: "inQuart",
-      });
-    };
-
-    if (drsActive && !prev.active && drsDriver) {
-      const strip = c.querySelector<HTMLElement>(
-        `[data-drs-strip="${drsDriver}"]`,
-      );
-      if (strip) revealStrip(strip);
-    }
-
-    if (!drsActive && prev.active) {
-      const dn = prev.driver ?? drsDriver;
-      if (dn) {
-        const strip = c.querySelector<HTMLElement>(`[data-drs-strip="${dn}"]`);
-        if (strip) hideStrip(strip);
+    const revealDrs = (dn: number) => {
+      const strip = c.querySelector<HTMLElement>(`[data-drs-strip="${dn}"]`);
+      const rail = c.querySelector<HTMLElement>(`[data-rail-drs="${dn}"]`);
+      if (strip) {
+        strip.classList.remove("drs-strip-active");
+        animate(strip, {
+          opacity: [0, 1],
+          scaleX: [0, 1],
+          duration: 450,
+          ease: "outExpo",
+          onComplete: () => strip.classList.add("drs-strip-active"),
+        });
       }
-    }
+      if (rail) {
+        rail.classList.remove("rail-drs-active");
+        animate(rail, {
+          opacity: [0, 1],
+          scaleY: [0, 1],
+          duration: 400,
+          ease: "outExpo",
+          onComplete: () => rail.classList.add("rail-drs-active"),
+        });
+      }
+    };
+    const hideDrs = (dn: number) => {
+      const strip = c.querySelector<HTMLElement>(`[data-drs-strip="${dn}"]`);
+      const rail = c.querySelector<HTMLElement>(`[data-rail-drs="${dn}"]`);
+      if (strip) {
+        strip.classList.remove("drs-strip-active");
+        animate(strip, {
+          opacity: [1, 0],
+          scaleX: [1, 0],
+          duration: 320,
+          ease: "inQuart",
+        });
+      }
+      if (rail) {
+        rail.classList.remove("rail-drs-active");
+        animate(rail, {
+          opacity: [1, 0],
+          scaleY: [1, 0],
+          duration: 320,
+          ease: "inQuart",
+        });
+      }
+    };
 
+    if (drsActive && !prev.active && drsDriver) revealDrs(drsDriver);
+    if (!drsActive && prev.active) hideDrs(prev.driver ?? drsDriver ?? 0);
     if (drsActive && prev.active && prev.driver && prev.driver !== drsDriver) {
-      const old = c.querySelector<HTMLElement>(
-        `[data-drs-strip="${prev.driver}"]`,
-      );
-      if (old) hideStrip(old);
-      if (drsDriver) {
-        const next = c.querySelector<HTMLElement>(
-          `[data-drs-strip="${drsDriver}"]`,
-        );
-        if (next) revealStrip(next);
-      }
+      hideDrs(prev.driver);
+      if (drsDriver) revealDrs(drsDriver);
     }
 
     prevDrsRef.current = { active: !!drsActive, driver: drsDriver };
   }, [drsActive, drsDriver]);
+
+  // Fastest lap — purple rail flash when overallBest improves
+  useEffect(() => {
+    if (!driverLayout.current || !isFinite(overallBest) || overallBest <= 0)
+      return;
+    let dn: number | null = null;
+    bestLapMap.forEach((time, driver) => {
+      if (time === overallBest) dn = driver;
+    });
+    if (dn === null || dn === prevFastestLapRef.current) return;
+    prevFastestLapRef.current = dn;
+    const c = driverLayout.current;
+    const rail = c.querySelector<HTMLElement>(`[data-team-rail="${dn}"]`);
+    const flIcon = c.querySelector<HTMLElement>(`[data-rail-fl="${dn}"]`);
+    if (!rail) return;
+    const tl = createTimeline();
+    tl.add(rail, { width: [2, 22], duration: 220, ease: "outExpo" }, 0);
+    if (flIcon)
+      tl.add(flIcon, { opacity: [0, 1], duration: 160, ease: "outQuad" }, 80);
+    if (flIcon)
+      tl.add(flIcon, { opacity: [1, 0], duration: 200, ease: "inQuad" }, 2800);
+    tl.add(rail, { width: [22, 2], duration: 500, ease: "inCubic" }, 3000);
+  }, [overallBest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initial stagger slide-in with spring physics
   useEffect(() => {
@@ -655,7 +875,7 @@ export default function DriverTable({
       });
     });
     return () => s.revert();
-  }, [positions.length]);
+  }, []);
 
   return (
     <div className="h-full flex flex-col" style={{ background: "transparent" }}>
@@ -675,7 +895,7 @@ export default function DriverTable({
           <div className="driver-detail driver-col-label justify-end">AGE</div>
           <div className="driver-detail driver-col-label justify-end">PIT</div>
         </div>
-        {positions.map((pos, idx) => {
+        {displayPositions.map((pos, idx) => {
           const driver = driverMap.get(pos.driver_number);
           const interval = intervalMap.get(pos.driver_number);
           const stint = stintMap.get(pos.driver_number);
@@ -725,6 +945,7 @@ export default function DriverTable({
           return (
             <div
               key={pos.driver_number}
+              data-driver-row={pos.driver_number}
               onClick={() => onSelectDriver(pos.driver_number)}
               className={`driver-row relative cursor-pointer ${
                 change === "up" ? "animate-flash-up" : ""
@@ -875,34 +1096,93 @@ export default function DriverTable({
                 }}
               />
 
-              {/* Left team color rail — always visible */}
+              {/* Left team color rail — momentary event notifier, AnimeJS owns width */}
               <div
-                className="absolute left-0 top-0 bottom-0"
-                style={{
-                  width: isSelected ? 3 : 2,
-                  background: teamColor,
-                  boxShadow: isSelected
-                    ? `0 0 10px ${teamColor}90, 0 0 22px ${teamColor}40`
-                    : "none",
-                  transition: "width 0.25s ease, box-shadow 0.3s ease",
-                }}
-              />
-
-              {/* Position number + direction arrow */}
-              <div className="flex items-center gap-0.5 pl-1.5">
-                <PositionNumber pos={pos.position} change={change} />
-                {change === "up" && (
+                data-team-rail={pos.driver_number}
+                data-team-color={teamColor}
+                className="absolute left-0 top-0 bottom-0 w-[2px] overflow-hidden"
+                style={{ background: teamColor }}
+              >
+                {/* dark overlay for contrast — makes icons readable on any team color */}
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ background: "rgba(0,0,0,0.4)" }}
+                />
+                {/* DRS sweep — AnimeJS animates opacity/scaleY, CSS owns base state */}
+                <div
+                  data-rail-drs={pos.driver_number}
+                  className="rail-drs absolute inset-0 pointer-events-none"
+                />
+                {/* pit in lane */}
+                <div
+                  data-rail-pit={pos.driver_number}
+                  className="rail-arrow absolute inset-0 flex items-center justify-center pointer-events-none"
+                >
                   <span
-                    style={{ color: "#22c55e", fontSize: 6, lineHeight: 1 }}
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 900,
+                      lineHeight: 1,
+                      color: "#ffb800",
+                      textShadow:
+                        "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(255,184,0,0.8)",
+                    }}
                   >
-                    ▲
+                    P
                   </span>
-                )}
-                {change === "down" && (
+                </div>
+                {/* pit exit */}
+                <div
+                  data-rail-out={pos.driver_number}
+                  className="rail-arrow absolute inset-0 flex items-center justify-center pointer-events-none"
+                >
                   <span
-                    style={{ color: "#ef4444", fontSize: 6, lineHeight: 1 }}
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 900,
+                      lineHeight: 1,
+                      color: "#22c55e",
+                      textShadow:
+                        "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(34,197,94,0.8)",
+                    }}
                   >
-                    ▼
+                    ↑
+                  </span>
+                </div>
+                {/* fastest lap star */}
+                <div
+                  data-rail-fl={pos.driver_number}
+                  className="rail-arrow absolute inset-0 flex items-center justify-center pointer-events-none"
+                >
+                  <span
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 900,
+                      lineHeight: 1,
+                      color: "#c084fc",
+                      textShadow:
+                        "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(192,132,252,0.9)",
+                    }}
+                  >
+                    ★
+                  </span>
+                </div>
+              </div>
+
+              {/* Position number */}
+              <div className="flex items-center pl-1.5 z-10 gap-1">
+                <PositionNumber pos={pos.position} change={change} />
+                {change && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 900,
+                      lineHeight: 1,
+                      color: change === "up" ? "#22c55e" : "#ef4444",
+                      textShadow: `0 1px 2px rgba(0,0,0,0.8), 0 0 8px ${change === "up" ? "rgba(34,197,94,0.6)" : "rgba(239,68,68,0.6)"}`,
+                    }}
+                  >
+                    {change === "up" ? "▲" : "▼"}
                   </span>
                 )}
               </div>

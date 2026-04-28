@@ -99,7 +99,7 @@ const BADGE_CFG: Record<
     border: "rgba(255,185,0,0.32)",
   },
   out: {
-    label: "OUT",
+    label: "EXIT PIT",
     color: "#22c55e",
     bg: "rgba(34,197,94,0.14)",
     border: "rgba(34,197,94,0.28)",
@@ -132,7 +132,7 @@ const BADGE_CFG: Record<
     ls: "0.3em",
   },
   "box-soon": {
-    label: "SOON",
+    label: "BOX SOON",
     color: "#f97316",
     bg: "rgba(249,115,22,0.14)",
     border: "rgba(249,115,22,0.3)",
@@ -284,12 +284,14 @@ function PositionNumber({
   pos: number;
   change: "up" | "down" | undefined;
 }) {
-  const prevRef = useRef(pos);
+  // Key on `change` transitions, not every pos update — pos changes every replay tick
+  // which would restart the CSS animation constantly
+  const prevChangeRef = useRef<typeof change>(undefined);
   const animKey = useRef(0);
-  if (prevRef.current !== pos) {
+  if (prevChangeRef.current !== change && change !== undefined) {
     animKey.current++;
-    prevRef.current = pos;
   }
+  prevChangeRef.current = change;
   return (
     <span
       key={animKey.current}
@@ -347,6 +349,13 @@ export default function DriverTable({
   const pendingPosTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rowPositionsRef = useRef<Map<number, number>>(new Map());
   const prevFastestLapRef = useRef<number | null>(null);
+  const railAnimRef = useRef<Map<number, ReturnType<typeof createTimeline>>>(new Map());
+  const pitAnimRef = useRef<Map<number, ReturnType<typeof createTimeline>>>(new Map());
+  // Tracks the last positionChanges object that triggered a rail animation.
+  // Prevents re-animating when positions ref changes every tick but changes haven't.
+  const lastPosChangesAnimRef = useRef<Record<number, "up" | "down"> | null>(null);
+  const positionsRef = useRef(positions);
+  positionsRef.current = positions;
 
   const [displayPositions, setDisplayPositions] =
     useState<Position[]>(positions);
@@ -426,6 +435,24 @@ export default function DriverTable({
     }
   });
 
+  // Initial stagger slide-in with spring physics
+  useEffect(() => {
+    if (!driverLayout.current || hasAnimated.current || positions.length === 0)
+      return;
+    hasAnimated.current = true;
+    const s = createScope({ root: driverLayout.current });
+    s.add(() => {
+      animate(".driver-row:not(.driver-header-row)", {
+        opacity: [0, 1],
+        x: [-48, 0],
+        delay: stagger(40, { ease: "outQuart" }),
+        duration: 520,
+        ease: spring({ stiffness: 200, damping: 18, mass: 2.2, velocity: 12 }),
+      });
+    });
+    return () => s.revert();
+  }, [positions.length]);
+
   // Rail animation + delayed row reorder
   useEffect(() => {
     if (pendingPosTimer.current) clearTimeout(pendingPosTimer.current);
@@ -434,17 +461,30 @@ export default function DriverTable({
       "up" | "down",
     ][];
 
-    if (entries.length > 0) {
+    // Only fire rail animation when positionChanges is a genuinely new object.
+    // `positions` gets a new array ref every 250ms replay tick even when no
+    // changes occurred — without this guard the rail would reset+restart every tick.
+    const shouldAnimate =
+      entries.length > 0 && lastPosChangesAnimRef.current !== positionChanges;
+
+    if (shouldAnimate) {
+      lastPosChangesAnimRef.current = positionChanges;
       const c = driverLayout.current;
       if (c) {
         entries.forEach(([dnStr]) => {
+          const dn = Number(dnStr);
           const rail = c.querySelector<HTMLElement>(
             `[data-team-rail="${dnStr}"]`,
           );
           if (!rail) return;
 
+          const prevTl = railAnimRef.current.get(dn);
+          if (prevTl) prevTl.pause();
+          rail.style.width = "2px";
+
           const W = 47;
           const tl = createTimeline();
+          railAnimRef.current.set(dn, tl);
           tl.add(
             rail,
             {
@@ -475,7 +515,9 @@ export default function DriverTable({
           );
         });
       }
-      // Snapshot row Y positions before reorder so FLIP can animate
+      // Snapshot row Y positions before reorder so FLIP can animate.
+      // Use positionsRef so the closure always captures the latest positions,
+      // not the stale snapshot from when the timer was created.
       pendingPosTimer.current = setTimeout(() => {
         if (driverLayout.current) {
           const snap = new Map<number, number>();
@@ -487,7 +529,7 @@ export default function DriverTable({
             });
           rowPositionsRef.current = snap;
         }
-        setDisplayPositions(positions);
+        setDisplayPositions(positionsRef.current);
       }, 400);
     } else {
       setDisplayPositions(positions);
@@ -553,6 +595,9 @@ export default function DriverTable({
     pitStatusMap.forEach((status, dn) => {
       if (prevPitRef.current.get(dn) === status) return;
 
+      const prevTl = pitAnimRef.current.get(dn);
+      if (prevTl) prevTl.pause();
+
       const bg = c.querySelector<HTMLElement>(`[data-pit-bg="${dn}"]`);
       const label = c.querySelector<HTMLElement>(`[data-pit-label="${dn}"]`);
       const gapText = c.querySelector<HTMLElement>(`[data-gap-text="${dn}"]`);
@@ -562,6 +607,7 @@ export default function DriverTable({
 
       if (status === "pitting") {
         const tl = createTimeline({ defaults: { ease: "outQuart" } });
+        pitAnimRef.current.set(dn, tl);
         if (bg)
           tl.add(
             bg,
@@ -593,16 +639,12 @@ export default function DriverTable({
         if (pitInline) tl.add(pitInline, { opacity: 0, duration: 120 }, 0);
       } else if (status === "just_out") {
         const tl = createTimeline({ defaults: { ease: "outCubic" } });
+        pitAnimRef.current.set(dn, tl);
+        // Animate from current values — previous timeline may have been paused
+        // mid-animation, so explicit from-values would cause a visible snap.
         if (bg)
-          tl.add(
-            bg,
-            {
-              backgroundColor: ["rgba(255,185,0,0.30)", "rgba(34,197,94,0.20)"],
-              duration: 750,
-            },
-            0,
-          );
-        if (label) tl.add(label, { opacity: [1, 0], duration: 150 }, 0);
+          tl.add(bg, { backgroundColor: "rgba(34,197,94,0.20)", duration: 750 }, 0);
+        if (label) tl.add(label, { opacity: 0, duration: 150 }, 0);
 
         // Crossfade gap → pit duration, auto-revert after 5s
         if (gapText) tl.add(gapText, { opacity: [1, 0], duration: 200 }, 0);
@@ -627,20 +669,23 @@ export default function DriverTable({
       }
     });
 
-    // Drivers leaving pit status — restore gap text, clear pit inline
+    // Drivers leaving pit status — restore gap text, clear pit inline + label
     prevPitRef.current.forEach((_, dn) => {
       if (pitStatusMap.has(dn)) return;
+      const prevTl = pitAnimRef.current.get(dn);
+      if (prevTl) prevTl.pause();
+      pitAnimRef.current.delete(dn);
       const bg = c.querySelector<HTMLElement>(`[data-pit-bg="${dn}"]`);
+      const label = c.querySelector<HTMLElement>(`[data-pit-label="${dn}"]`);
       const gapText = c.querySelector<HTMLElement>(`[data-gap-text="${dn}"]`);
       const pitInline = c.querySelector<HTMLElement>(
         `[data-pit-inline="${dn}"]`,
       );
+      // Use single-target form so we animate from whatever the current paused
+      // state is — avoids snapping if bg was yellow rather than green.
       if (bg)
-        animate(bg, {
-          backgroundColor: ["rgba(34,197,94,0.20)", "rgba(0,0,0,0)"],
-          duration: 800,
-          ease: "inQuart",
-        });
+        animate(bg, { backgroundColor: "rgba(0,0,0,0)", duration: 500, ease: "inQuart" });
+      if (label) animate(label, { opacity: 0, duration: 200 });
       if (gapText) animate(gapText, { opacity: 1, duration: 200 });
       if (pitInline) animate(pitInline, { opacity: 0, duration: 200 });
     });
@@ -862,24 +907,6 @@ export default function DriverTable({
       tl.add(flIcon, { opacity: [1, 0], duration: 200, ease: "inQuad" }, 2800);
     tl.add(rail, { width: [22, 2], duration: 500, ease: "inCubic" }, 3000);
   }, [overallBest]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Initial stagger slide-in with spring physics
-  useEffect(() => {
-    if (!driverLayout.current || hasAnimated.current || positions.length === 0)
-      return;
-    hasAnimated.current = true;
-    const s = createScope({ root: driverLayout.current });
-    s.add(() => {
-      animate(".driver-row:not(.driver-header-row)", {
-        opacity: [0, 1],
-        x: [-48, 0],
-        delay: stagger(40, { ease: "outQuart" }),
-        duration: 520,
-        ease: spring({ stiffness: 200, damping: 18, mass: 2.2, velocity: 12 }),
-      });
-    });
-    return () => s.revert();
-  }, []);
 
   return (
     <div className="h-full flex flex-col" style={{ background: "transparent" }}>
@@ -1261,7 +1288,7 @@ export default function DriverTable({
                         letterSpacing: "0.1em",
                       }}
                     >
-                      OUT
+                      EXIT PIT
                     </span>
                   ) : (
                     formatLapTime(lapDuration)

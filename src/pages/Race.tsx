@@ -108,7 +108,7 @@ export default function Race() {
         setReplayPositionChanges(changes);
         changeClearTimer.current = setTimeout(
           () => setReplayPositionChanges({}),
-          2000,
+          3000,
         );
       }
     }

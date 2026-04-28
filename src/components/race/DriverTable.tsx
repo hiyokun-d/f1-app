@@ -352,7 +352,11 @@ export default function DriverTable({
     useState<Position[]>(positions);
 
   // DRS — owned here, not threaded from Race.tsx
-  const { latest: carLatest } = useCarData(sessionKey, selectedDriver, sessionDateEnd);
+  const { latest: carLatest } = useCarData(
+    sessionKey,
+    selectedDriver,
+    sessionDateEnd,
+  );
   const drsActive = (carLatest?.drs ?? 0) >= 10;
   const drsDriver = selectedDriver;
 
@@ -439,7 +443,7 @@ export default function DriverTable({
           );
           if (!rail) return;
 
-          const W = 40;
+          const W = 44;
           const tl = createTimeline();
           tl.add(
             rail,
@@ -447,10 +451,10 @@ export default function DriverTable({
               width: [2, W],
               duration: 200,
               ease: spring({
-                stiffness: 208.1,
-                damping: 17.2,
-                mass: 2.3,
-                velocity: 14.2,
+                stiffness: 303.1,
+                damping: 18.4,
+                mass: 1.2,
+                velocity: 10.3,
               }),
             },
             0,
@@ -1104,69 +1108,16 @@ export default function DriverTable({
                 style={{ background: teamColor }}
               >
                 {/* dark overlay for contrast — makes icons readable on any team color */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{ background: "rgba(0,0,0,0.4)" }}
-                />
+                {/* <div */}
+                {/*   className="absolute inset-0 pointer-events-none" */}
+                {/*   style={{ background: "rgba(0,0,0,0.2)" }} */}
+                {/* /> */}
+
                 {/* DRS sweep — AnimeJS animates opacity/scaleY, CSS owns base state */}
                 <div
                   data-rail-drs={pos.driver_number}
                   className="rail-drs absolute inset-0 pointer-events-none"
                 />
-                {/* pit in lane */}
-                <div
-                  data-rail-pit={pos.driver_number}
-                  className="rail-arrow absolute inset-0 flex items-center justify-center pointer-events-none"
-                >
-                  <span
-                    style={{
-                      fontSize: 8,
-                      fontWeight: 900,
-                      lineHeight: 1,
-                      color: "#ffb800",
-                      textShadow:
-                        "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(255,184,0,0.8)",
-                    }}
-                  >
-                    P
-                  </span>
-                </div>
-                {/* pit exit */}
-                <div
-                  data-rail-out={pos.driver_number}
-                  className="rail-arrow absolute inset-0 flex items-center justify-center pointer-events-none"
-                >
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 900,
-                      lineHeight: 1,
-                      color: "#22c55e",
-                      textShadow:
-                        "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(34,197,94,0.8)",
-                    }}
-                  >
-                    ↑
-                  </span>
-                </div>
-                {/* fastest lap star */}
-                <div
-                  data-rail-fl={pos.driver_number}
-                  className="rail-arrow absolute inset-0 flex items-center justify-center pointer-events-none"
-                >
-                  <span
-                    style={{
-                      fontSize: 8,
-                      fontWeight: 900,
-                      lineHeight: 1,
-                      color: "#c084fc",
-                      textShadow:
-                        "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(192,132,252,0.9)",
-                    }}
-                  >
-                    ★
-                  </span>
-                </div>
               </div>
 
               {/* Position number */}

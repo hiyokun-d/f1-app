@@ -126,8 +126,8 @@ export default function StandingsPanel({
         side="left"
         currentWidth={width}
         onResize={onWidthChange}
-        minWidth={240}
-        maxWidth={560}
+        minWidth={260}
+        maxWidth={660}
       />
     </div>
   );

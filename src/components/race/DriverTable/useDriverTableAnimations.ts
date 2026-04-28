@@ -18,6 +18,8 @@ import {
 import type { AutoLayout } from "animejs";
 import type { Position, OvertakeEvent } from "../../../types";
 
+const currentEasing = cubicBezier(0.683, 0.284, 0.28, 1.289);
+
 interface AnimationProps {
   containerRef: RefObject<HTMLDivElement | null>;
   positions: Position[];
@@ -590,9 +592,9 @@ export function useDriverTableAnimations({
       animate(row, { x: 4, duration: 160, ease: "outExpo" });
       if (hoverBg)
         animate(hoverBg, {
-          backgroundColor: ["rgba(255,255,255,0)", hexToRgba(teamColor, 0.07)],
+          backgroundColor: ["rgba(255,255,255,0)", hexToRgba(teamColor, 0.57)],
           duration: 200,
-          ease: "outQuart",
+          ease: currentEasing,
         });
     };
 
@@ -646,20 +648,20 @@ export function useDriverTableAnimations({
         ?.getAttribute("data-team-color") ?? "#888888";
 
     animate(row, {
-      x: [-10, 3, 0],
+      x: [10, 0],
       duration: 460,
-      ease: spring({ stiffness: 340, damping: 18, mass: 0.8 }),
+      ease: currentEasing,
     });
 
     if (selectBg) {
       animate(selectBg, {
         backgroundColor: [
           "rgba(255,255,255,0)",
-          hexToRgba(teamColor, 0.22),
+          hexToRgba(teamColor, 0.52),
           "rgba(255,255,255,0)",
         ],
-        duration: 700,
-        ease: "outQuart",
+        duration: 450,
+        ease: currentEasing,
       });
     }
   }, [selectedDriver]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -443,7 +443,7 @@ export default function DriverTable({
           );
           if (!rail) return;
 
-          const W = 44;
+          const W = 47;
           const tl = createTimeline();
           tl.add(
             rail,
@@ -1108,10 +1108,13 @@ export default function DriverTable({
                 style={{ background: teamColor }}
               >
                 {/* dark overlay for contrast — makes icons readable on any team color */}
-                {/* <div */}
-                {/*   className="absolute inset-0 pointer-events-none" */}
-                {/*   style={{ background: "rgba(0,0,0,0.2)" }} */}
-                {/* /> */}
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background: change ? "rgba(0,0,0, 0.5)" : "rgba(0,0,0, 0)",
+                    transition: "background .2s",
+                  }}
+                />
 
                 {/* DRS sweep — AnimeJS animates opacity/scaleY, CSS owns base state */}
                 <div

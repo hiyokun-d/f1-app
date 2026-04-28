@@ -382,7 +382,7 @@ export default function Home() {
             className="text-[10px] uppercase tracking-[0.3em]"
             style={{ fontFamily: "var(--font-display)", color: "#5a6272" }}
           >
-            Made with ♥ by hiyo
+            Made with ♥ by hiyo and Nerovyn
           </p>
         </div>
       </div>

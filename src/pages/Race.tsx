@@ -216,20 +216,84 @@ export default function Race() {
   if (race.loading) {
     return (
       <div
-        className="h-screen flex flex-col items-center justify-center gap-4"
+        className="h-screen flex flex-col items-center justify-center"
         style={{ background: "#06070a" }}
       >
-        <div className="w-8 h-8 border-2 border-[#e8002d] border-t-transparent rounded-full animate-spin" />
-        <span
+        {/* Injecting a small custom animation for the telemetry scanner */}
+        <style>
+          {`
+          @keyframes scan {
+            0% { transform: translateX(0); }
+            50% { transform: translateX(288px); }
+            100% { transform: translateX(0); }
+          }
+          .animate-scan {
+            animation: scan 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+          }
+        `}
+        </style>
+
+        {/* The Telemetry Oscilloscope */}
+        <div className="relative w-72 h-32 border-b border-l border-[#1a1a24] overflow-hidden">
+          {/* Technical Grid Background */}
+          <div
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, #1a1a24 1px, transparent 1px), linear-gradient(to bottom, #1a1a24 1px, transparent 1px)",
+              backgroundSize: "12px 12px",
+            }}
+          />
+
+          {/* Fake Data Traces (Speed & Brake) */}
+          <svg
+            className="absolute w-full h-full opacity-40"
+            viewBox="0 0 100 50"
+            preserveAspectRatio="none"
+          >
+            {/* Smooth Speed Trace */}
+            <path
+              d="M0,40 C10,40 15,10 25,10 C35,10 40,30 50,30 C60,30 65,5 75,5 C85,5 90,35 100,35"
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="0.5"
+            />
+            {/* Stepped Gear/Brake Trace */}
+            <path
+              d="M0,45 L15,45 L15,35 L30,35 L30,25 L50,25 L50,40 L70,40 L70,20 L100,20"
+              fill="none"
+              stroke="#e8002d"
+              strokeWidth="0.5"
+            />
+          </svg>
+
+          {/* The Scanning Playhead (Looks like it's reading live data) */}
+          <div className="absolute top-0 bottom-0 left-0 w-[2px] bg-[#B15BE0] shadow-[0_0_12px_#B15BE0] animate-scan z-10" />
+        </div>
+
+        {/* Terminal Readouts */}
+        <div
+          className="mt-4 flex w-72 justify-between"
           style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 13,
-            color: "#4b5563",
-            letterSpacing: "0.2em",
+            fontFamily: "var(--font-data)", // Make sure to use your monospace/tech font here
+            fontSize: 10,
+            letterSpacing: "0.05em",
           }}
         >
-          LOADING SESSION {key}
-        </span>
+          <div className="flex flex-col text-left gap-1">
+            <span className="text-[#00D2FF] font-bold">
+              RX: RECEIVING PACKETS
+            </span>
+            <span className="text-[#4b5563]">OPENF1 API SYNC</span>
+          </div>
+
+          <div className="flex flex-col text-right gap-1">
+            <span className="text-[#e8002d] animate-pulse">
+              AWAITING TELEMETRY
+            </span>
+            <span className="text-[#4b5563]">SESSION {key}</span>
+          </div>
+        </div>
       </div>
     );
   }

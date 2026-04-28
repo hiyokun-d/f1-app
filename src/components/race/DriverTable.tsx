@@ -951,9 +951,7 @@ export default function DriverTable({
               key={pos.driver_number}
               data-driver-row={pos.driver_number}
               onClick={() => onSelectDriver(pos.driver_number)}
-              className={`driver-row relative cursor-pointer ${
-                change === "up" ? "animate-flash-up" : ""
-              } ${change === "down" ? "animate-flash-down" : ""}`}
+              className={`driver-row relative cursor-pointer transition duration-200 hover:bg-[rgb(255, 255, 255)] hover:scale-105`}
               style={{
                 padding: "5px 10px 5px 14px",
                 borderBottom: "1px solid rgba(255,255,255,0.055)",

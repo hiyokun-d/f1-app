@@ -599,7 +599,7 @@ body,
 }
 
 /* ── Driver table layout ─────────────────────────────────────────── */
-/* Compact: pos | tyre-icon | name+badges | gap */
+/* Compact: pos | tyre | name+badges | gap */
 .driver-row {
 	display: grid;
 	grid-template-columns: 28px 38px 1fr 76px;
@@ -607,10 +607,10 @@ body,
 	align-items: center;
 }
 
-/* Expanded: pos | tyre | name | gap | int | lap | age | pit_dur */
+/* Expanded: pos | tyre+age | name+team | gap | int | lap_time | pit (all fixed — prevents 1fr spreading columns apart) */
 .driver-table-expanded .driver-row {
-	grid-template-columns: 28px 38px 42px 62px 48px 58px 20px 42px;
-	column-gap: 5px;
+	grid-template-columns: 28px 34px 52px 62px 50px 66px 44px;
+	column-gap: 3px;
 }
 
 /* Detail columns hidden until expanded */
@@ -622,21 +622,35 @@ body,
 	align-items: center;
 }
 
+/* Sub-labels inside cells — only visible in expanded mode */
+.driver-tyre-age,
+.driver-team-sub,
+.driver-lap-sub,
+.driver-pit-sub {
+	display: none;
+}
+.driver-table-expanded .driver-tyre-age,
+.driver-table-expanded .driver-team-sub,
+.driver-table-expanded .driver-lap-sub,
+.driver-table-expanded .driver-pit-sub {
+	display: block;
+}
+
 /* Column header row */
 .driver-header-row {
 	position: sticky;
 	top: 0;
 	z-index: 20;
 	background: var(--f1-dark);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .driver-col-label {
 	font-family: var(--font-display);
 	font-size: 8px;
 	font-weight: 700;
-	letter-spacing: 0.2em;
-	color: #2e3444;
+	letter-spacing: 0.18em;
+	color: #3a4258;
 	text-transform: uppercase;
 }
 

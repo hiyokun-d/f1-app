@@ -58,7 +58,9 @@ export function DriverRow({
   const isFastestLap = bestLap !== undefined && bestLap > 0 && bestLap === overallBest;
   const lapDuration = lastLap?.lap_duration ?? null;
   const isBestForDriver = lapDuration !== null && lapDuration === bestLap;
-  const pitDuration = lastPitMap.get(pos.driver_number)?.pit_duration;
+  const lastPit = lastPitMap.get(pos.driver_number);
+  const pitDuration = lastPit?.pit_duration;
+  const pitLap = lastPit?.lap_number;
   const hasDrs = drsDriver === pos.driver_number && drsActive;
 
   const compound = stint?.compound ?? "UNKNOWN";
@@ -83,7 +85,7 @@ export function DriverRow({
       onClick={() => onSelectDriver(pos.driver_number)}
       className="driver-row relative cursor-pointer"
       style={{
-        padding: "5px 10px 5px 14px",
+        padding: "3px 8px 3px 12px",
         borderBottom: "1px solid rgba(255,255,255,0.055)",
         isolation: "isolate",
         background: isSelected
@@ -244,8 +246,8 @@ export function DriverRow({
         )}
       </div>
 
-      {/* Tyre compound badge */}
-      <div className="flex items-center justify-center">
+      {/* Tyre compound badge + age sub-label (age only visible in expanded) */}
+      <div className="flex flex-col items-center justify-center">
         {tyre ? (
           <TyreBadge
             tyre={tyre}
@@ -268,25 +270,54 @@ export function DriverRow({
             {pos.driver_number}
           </span>
         )}
+        {tyre && tyreAge !== null && (
+          <span
+            className="driver-tyre-age"
+            style={{
+              fontFamily: "var(--font-data)",
+              fontSize: 7,
+              fontWeight: 700,
+              lineHeight: 1,
+              color: tyreAge > 28 ? "#f97316" : tyreAge > 16 ? "#eab308" : "#4b5563",
+            }}
+          >
+            {tyreAge}L
+          </span>
+        )}
       </div>
 
-      {/* Driver name + badges */}
-      <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+      {/* Driver name + badges + team sub-label (team only visible in expanded) */}
+      <div className="flex flex-col justify-center min-w-0">
+        <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+          <span
+            className="truncate min-w-0"
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: 13,
+              letterSpacing: "0.025em",
+              color: isLeader ? "#ffd600" : isSelected ? "#ffffff" : "#d1d5db",
+            }}
+          >
+            {driver?.name_acronym ?? "???"}
+          </span>
+          {activeBadges.map((v) => (
+            <StatusBadge key={v} variant={v} />
+          ))}
+        </div>
         <span
-          className="truncate min-w-0"
+          className="driver-team-sub truncate"
           style={{
             fontFamily: "var(--font-display)",
-            fontWeight: 700,
-            fontSize: 13,
-            letterSpacing: "0.025em",
-            color: isLeader ? "#ffd600" : isSelected ? "#ffffff" : "#d1d5db",
+            fontSize: 7,
+            letterSpacing: "0.08em",
+            lineHeight: 1,
+            marginTop: 1,
+            color: `${teamColor}60`,
           }}
         >
-          {driver?.name_acronym ?? "???"}
+          {driver?.team_name?.toUpperCase() ?? ""}
         </span>
-        {activeBadges.map((v) => (
-          <StatusBadge key={v} variant={v} />
-        ))}
       </div>
 
       {/* Gap to leader — crossfades with pit duration on pit exit */}
@@ -335,15 +366,16 @@ export function DriverRow({
         </span>
       </div>
 
-      {/* Last lap [expanded] */}
-      <div className="driver-detail justify-end">
+      {/* Last lap + personal best sub-label [expanded] */}
+      <div className="driver-detail" style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}>
         <span
           style={{
             fontFamily: "var(--font-data)",
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: isFastestLap || isBestForDriver ? 700 : 400,
             color: isFastestLap ? "#c084fc" : isBestForDriver ? "#22c55e" : "#6b7280",
             letterSpacing: "-0.02em",
+            lineHeight: 1,
           }}
         >
           {lastLap?.is_pit_out_lap ? (
@@ -362,35 +394,50 @@ export function DriverRow({
             formatLapTime(lapDuration)
           )}
         </span>
-      </div>
-
-      {/* Tyre age [expanded] */}
-      <div className="driver-detail justify-end">
-        {tyreAge !== null && (
+        {bestLap !== undefined && lapDuration !== null && lapDuration !== bestLap && !lastLap?.is_pit_out_lap && (
           <span
+            className="driver-lap-sub"
             style={{
               fontFamily: "var(--font-data)",
-              fontSize: 10,
-              color: tyreAge > 28 ? "#f97316" : tyreAge > 16 ? "#eab308" : "#6b7280",
+              fontSize: 7,
+              lineHeight: 1,
+              marginTop: 1,
+              letterSpacing: "-0.01em",
+              color: isFastestLap ? "rgba(192,132,252,0.5)" : "rgba(34,197,94,0.6)",
             }}
           >
-            {tyreAge}
+            {formatLapTime(bestLap)}
           </span>
         )}
       </div>
 
-      {/* Pit duration [expanded] */}
-      <div className="driver-detail justify-end">
+      {/* Pit duration + lap number sub-label [expanded] */}
+      <div className="driver-detail" style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}>
         <span
           style={{
             fontFamily: "var(--font-data)",
             fontSize: 10,
             letterSpacing: "-0.02em",
+            lineHeight: 1,
             color: isJustOut ? "#22c55e" : "#6b7280",
           }}
         >
           {pitDuration != null ? `${pitDuration.toFixed(1)}s` : "—"}
         </span>
+        {pitLap != null && (
+          <span
+            className="driver-pit-sub"
+            style={{
+              fontFamily: "var(--font-data)",
+              fontSize: 7,
+              lineHeight: 1,
+              marginTop: 1,
+              color: "#2e3444",
+            }}
+          >
+            L{pitLap}
+          </span>
+        )}
       </div>
     </div>
   );

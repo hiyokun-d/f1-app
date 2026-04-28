@@ -338,17 +338,17 @@ export default function Race() {
       </div>
 
       {/* ── Layer 3: Header ───────────────────────────────────────────── */}
-      {/* <div className="relative z-30" style={{ height: HEADER_H }}> */}
-      {/*   <Header */}
-      {/*     sessionName={sessionName} */}
-      {/*     sessionType={sessionType} */}
-      {/*     location={sessionLocation} */}
-      {/*     currentLap={currentLap} */}
-      {/*     totalLaps={0} */}
-      {/*     weather={race.weather} */}
-      {/*     raceControl={replayRaceControl} */}
-      {/*   /> */}
-      {/* </div> */}
+      <div className="relative z-30" style={{ height: HEADER_H }}>
+        <Header
+          sessionName={sessionName}
+          sessionType={sessionType}
+          location={sessionLocation}
+          currentLap={currentLap}
+          totalLaps={0}
+          weather={race.weather}
+          raceControl={replayRaceControl}
+        />
+      </div>
 
       {/* ── Layer 4: Overtake banner ──────────────────────────────────── */}
       {activeBannerOvertake &&

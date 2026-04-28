@@ -7,7 +7,7 @@ import type {
   Pit,
   OvertakeEvent,
 } from "../../../types";
-import DriverTable from "../DriverTable";
+import DriverTable from "../DriverTable/index";
 import ResizeHandle from "../ResizeHandle";
 
 interface Props {

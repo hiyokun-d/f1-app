@@ -1,27 +1,27 @@
-# TODO / Refactor Plan
+# TODO
 
-## DriverTable.tsx — High priority
+## DriverTable — remaining
 
-### Animation cleanup
-- [ ] Wire `data-rail-pit` and `data-rail-out` into the pit effect (currently only the background/label animates, not the rail)
-- [ ] Extract all rail animations into a `useRailAnimations(containerRef, ...)` hook
-- [ ] Extract pit animations into `usePitAnimations(containerRef, pitStatusMap, prevPitRef)`
-- [ ] Extract overtake animations into `useOvertakeAnimations(containerRef, recentOvertakes, prevOvertakesLenRef)`
-- [ ] Extract DRS animations into `useDrsAnimations(containerRef, drsActive, drsDriver, prevDrsRef)`
-- [ ] Extract fastest lap animation into `useFastestLapAnimation(containerRef, overallBest, bestLapMap, prevFastestLapRef)`
+- [ ] Wire `data-rail-pit` and `data-rail-out` into the pit effect (background/label animates, rail does not yet)
+- [ ] Extract `<RailIndicator />` sub-component — the `data-team-rail` subtree with all its data-slots
 
-### Component extraction
-- [ ] Extract `<DriverRow />` component — currently all render logic is inline in `.map()`
-- [ ] Extract `<RailIndicator />` — the `data-team-rail` subtree with all its slots
-
-### Code quality
-- [ ] Audit: find any remaining React `style` props that include properties AnimeJS also animates (ownership conflict)
-- [ ] All derived maps (`driverMap`, `stintMap`, `lapMap`, etc.) re-created on every render — move into `useMemo`
-- [ ] `overallBest` uses `Math.min(...Array.from(...))` which throws on empty — guard with `Infinity` fallback
+### Completed ✅
+- [x] Refactor monolith `DriverTable.tsx` (1355 lines) → `DriverTable/` folder (7 files)
+- [x] Extract `<DriverRow />` — `DriverTable/DriverRow.tsx`
+- [x] All derived maps into `useMemo` (no rebuild on every 250ms replay tick)
+- [x] All animation effects consolidated into `useDriverTableAnimations` (intro, rail, FLIP, layout, pit, overtake, DRS, FL, hover, click)
+- [x] `overallBest` safe — `Math.min(...[])` returns `Infinity`, guarded by `!isFinite()` in hook
+- [x] FLIP row reorder fires on every position change via `commitPositions` + `prevOrderRef`
+- [x] Fix animation flickering during replay (rail, pit overlay, pos-number CSS anim)
+- [x] Fix PIT STOP banner stuck visible after stop completes
+- [x] Hover animation (translateX nudge + team-color glow overlay)
+- [x] Click/select animation (spring slide-in + team-color flash)
+- [x] Position number punch-in: scale bounce on pos-up/pos-down keyframes
+- [x] Arrow indicator (▲▼) pops in with CSS spring animation
 
 ## Race.tsx — Medium priority
 
-- [ ] `replayPositionChanges` is cleared after 2000ms but `positionChanges` in DriverTable uses the same timeout — consider a single source of truth
+- [ ] `replayPositionChanges` cleared after 2000ms shares logic with DriverTable — consider single source of truth
 - [ ] Commented-out `<Header />` and `<TelemetryPanel />` — decide: delete or restore
 
 ## Future rail events (nice to have)
@@ -33,4 +33,3 @@
 ## Architecture (longer term)
 - [ ] Move all `data-*` attribute queries behind a `useDriverTableRefs()` helper that returns typed getters
 - [ ] Consider splitting `useRaceData` — it fetches 9 endpoints serially; could parallelize more aggressively with a smarter cache
-- [ ] `DriverTable` re-renders on every race poll (15s) — profile whether animation effects cause layout thrash

@@ -1,5 +1,17 @@
-import type { Driver, Position, Interval, Lap, Stint, Pit } from "../../../types";
-import { formatLapTime, formatGap, formatInterval, teamHex } from "../../../utils/format";
+import type {
+  Driver,
+  Position,
+  Interval,
+  Lap,
+  Stint,
+  Pit,
+} from "../../../types";
+import {
+  formatLapTime,
+  formatGap,
+  formatInterval,
+  teamHex,
+} from "../../../utils/format";
 import { TYRE_COLORS, TYRE_LIFE_LAPS, type BadgeVariant } from "./constants";
 import { StatusBadge } from "./StatusBadge";
 import { TyreBadge } from "./TyreBadge";
@@ -15,8 +27,18 @@ interface DriverRowProps {
   bestLapMap: Map<number, number>;
   lastPitMap: Map<number, Pit>;
   pitStatusMap: Map<number, "pitting" | "just_out">;
+  pitCountMap: Map<number, number>;
   positionChanges: Record<number, "up" | "down">;
   overallBest: number;
+  overallBestSectors: {
+    s1: number | null;
+    s2: number | null;
+    s3: number | null;
+  };
+  bestSectorMap: Map<
+    number,
+    { s1: number | null; s2: number | null; s3: number | null }
+  >;
   maxLap: number;
   selectedDriver: number | null;
   drsDriver: number | null;
@@ -34,8 +56,11 @@ export function DriverRow({
   bestLapMap,
   lastPitMap,
   pitStatusMap,
+  pitCountMap,
   positionChanges,
   overallBest,
+  overallBestSectors,
+  bestSectorMap,
   maxLap,
   selectedDriver,
   drsDriver,
@@ -52,16 +77,55 @@ export function DriverRow({
   const isLeader = idx === 0;
   const isPitting = pitStatusMap.get(pos.driver_number) === "pitting";
   const isJustOut = pitStatusMap.get(pos.driver_number) === "just_out";
-  const tyre = stint ? (TYRE_COLORS[stint.compound] ?? TYRE_COLORS.UNKNOWN) : null;
+  const tyre = stint
+    ? (TYRE_COLORS[stint.compound] ?? TYRE_COLORS.UNKNOWN)
+    : null;
   const teamColor = teamHex(driver?.team_colour);
-  const tyreAge = stint ? maxLap - stint.lap_start + 1 + stint.tyre_age_at_start : null;
-  const isFastestLap = bestLap !== undefined && bestLap > 0 && bestLap === overallBest;
+  const tyreAge = stint
+    ? maxLap - stint.lap_start + 1 + stint.tyre_age_at_start
+    : null;
+  const isFastestLap =
+    bestLap !== undefined && bestLap > 0 && bestLap === overallBest;
   const lapDuration = lastLap?.lap_duration ?? null;
   const isBestForDriver = lapDuration !== null && lapDuration === bestLap;
   const lastPit = lastPitMap.get(pos.driver_number);
   const pitDuration = lastPit?.pit_duration;
   const pitLap = lastPit?.lap_number;
   const hasDrs = drsDriver === pos.driver_number && drsActive;
+  const pitCount = pitCountMap.get(pos.driver_number) ?? 0;
+  const driverBestSectors = bestSectorMap.get(pos.driver_number);
+  const s1 = lastLap?.duration_sector_1 ?? null;
+  const s2 = lastLap?.duration_sector_2 ?? null;
+  const s3 = lastLap?.duration_sector_3 ?? null;
+  const s1Color =
+    s1 !== null && s1 === overallBestSectors.s1
+      ? "#c084fc"
+      : s1 !== null &&
+          driverBestSectors?.s1 !== null &&
+          s1 === driverBestSectors?.s1
+        ? "#22c55e"
+        : "#4b5563";
+  const s2Color =
+    s2 !== null && s2 === overallBestSectors.s2
+      ? "#c084fc"
+      : s2 !== null &&
+          driverBestSectors?.s2 !== null &&
+          s2 === driverBestSectors?.s2
+        ? "#22c55e"
+        : "#4b5563";
+  const s3Color =
+    s3 !== null && s3 === overallBestSectors.s3
+      ? "#c084fc"
+      : s3 !== null &&
+          driverBestSectors?.s3 !== null &&
+          s3 === driverBestSectors?.s3
+        ? "#22c55e"
+        : "#4b5563";
+  const miniSegs = [
+    ...(lastLap?.segments_sector_1 ?? []),
+    ...(lastLap?.segments_sector_2 ?? []),
+    ...(lastLap?.segments_sector_3 ?? []),
+  ];
 
   const compound = stint?.compound ?? "UNKNOWN";
   const expectedLife = TYRE_LIFE_LAPS[compound] ?? 30;
@@ -148,7 +212,14 @@ export function DriverRow({
         className="pit-label absolute inset-0 flex items-center justify-center pointer-events-none"
         style={{ zIndex: 10 }}
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
+          }}
+        >
           <span
             style={{
               fontFamily: "var(--font-display)",
@@ -156,7 +227,8 @@ export function DriverRow({
               fontWeight: 900,
               letterSpacing: "0.5em",
               color: "#ffb800",
-              textShadow: "0 0 30px rgba(255,185,0,1), 0 0 60px rgba(255,185,0,0.5)",
+              textShadow:
+                "0 0 30px rgba(255,185,0,1), 0 0 60px rgba(255,185,0,0.5)",
               textTransform: "uppercase",
             }}
           >
@@ -278,7 +350,8 @@ export function DriverRow({
               fontSize: 7,
               fontWeight: 700,
               lineHeight: 1,
-              color: tyreAge > 28 ? "#f97316" : tyreAge > 16 ? "#eab308" : "#4b5563",
+              color:
+                tyreAge > 28 ? "#f97316" : tyreAge > 16 ? "#eab308" : "#4b5563",
             }}
           >
             {tyreAge}L
@@ -287,7 +360,7 @@ export function DriverRow({
       </div>
 
       {/* Driver name + badges + team sub-label (team only visible in expanded) */}
-      <div className="flex flex-col justify-center min-w-0">
+      <div className="driver-name-cell flex flex-col justify-center min-w-0">
         <div className="flex items-center gap-1 min-w-0 overflow-hidden">
           <span
             className="truncate min-w-0"
@@ -367,13 +440,20 @@ export function DriverRow({
       </div>
 
       {/* Last lap + personal best sub-label [expanded] */}
-      <div className="driver-detail" style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}>
+      <div
+        className="driver-detail"
+        style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}
+      >
         <span
           style={{
             fontFamily: "var(--font-data)",
             fontSize: 11,
             fontWeight: isFastestLap || isBestForDriver ? 700 : 400,
-            color: isFastestLap ? "#c084fc" : isBestForDriver ? "#22c55e" : "#6b7280",
+            color: isFastestLap
+              ? "#c084fc"
+              : isBestForDriver
+                ? "#22c55e"
+                : "#6b7280",
             letterSpacing: "-0.02em",
             lineHeight: 1,
           }}
@@ -394,25 +474,63 @@ export function DriverRow({
             formatLapTime(lapDuration)
           )}
         </span>
-        {bestLap !== undefined && lapDuration !== null && lapDuration !== bestLap && !lastLap?.is_pit_out_lap && (
-          <span
-            className="driver-lap-sub"
-            style={{
-              fontFamily: "var(--font-data)",
-              fontSize: 7,
-              lineHeight: 1,
-              marginTop: 1,
-              letterSpacing: "-0.01em",
-              color: isFastestLap ? "rgba(192,132,252,0.5)" : "rgba(34,197,94,0.6)",
-            }}
-          >
-            {formatLapTime(bestLap)}
-          </span>
-        )}
+        {bestLap !== undefined &&
+          lapDuration !== null &&
+          lapDuration !== bestLap &&
+          !lastLap?.is_pit_out_lap && (
+            <span
+              className="driver-lap-sub"
+              style={{
+                fontFamily: "var(--font-data)",
+                fontSize: 7,
+                lineHeight: 1,
+                marginTop: 1,
+                letterSpacing: "-0.01em",
+                color: isFastestLap
+                  ? "rgba(192,132,252,0.5)"
+                  : "rgba(34,197,94,0.6)",
+              }}
+            >
+              {formatLapTime(bestLap)}
+            </span>
+          )}
+
+        {/* Sector times S1/S2/S3 */}
+        {(s1 !== null || s2 !== null || s3 !== null) &&
+          !lastLap?.is_pit_out_lap && (
+            <div
+              className="driver-detail"
+              style={{ display: "flex", gap: 3, marginTop: 2 }}
+            >
+              {[
+                { v: s1, c: s1Color },
+                { v: s2, c: s2Color },
+                { v: s3, c: s3Color },
+              ].map((sec, i) =>
+                sec.v !== null ? (
+                  <span
+                    key={i}
+                    style={{
+                      fontFamily: "var(--font-data)",
+                      fontSize: 6,
+                      lineHeight: 1,
+                      letterSpacing: "-0.01em",
+                      color: sec.c,
+                    }}
+                  >
+                    {sec.v.toFixed(3)}
+                  </span>
+                ) : null,
+              )}
+            </div>
+          )}
       </div>
 
       {/* Pit duration + lap number sub-label [expanded] */}
-      <div className="driver-detail" style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}>
+      <div
+        className="driver-detail"
+        style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}
+      >
         <span
           style={{
             fontFamily: "var(--font-data)",
@@ -436,9 +554,41 @@ export function DriverRow({
             }}
           >
             L{pitLap}
+            {pitCount > 0 ? ` · S${pitCount}` : ""}
           </span>
         )}
       </div>
+
+      {/* Mini-sector strip */}
+      {/* {miniSegs.length > 0 && ( */}
+      {/*   <div */}
+      {/*     className="absolute bottom-0 left-0 right-0 pointer-events-none flex" */}
+      {/*     style={{ height: 3, zIndex: 5 }} */}
+      {/*   > */}
+      {/*     {miniSegs.map((seg, i) => { */}
+      {/*       const bg = */}
+      {/*         seg === 2051 */}
+      {/*           ? "#c084fc" */}
+      {/*           : seg === 2049 */}
+      {/*             ? "#22c55e" */}
+      {/*             : seg === 2048 */}
+      {/*               ? "#eab308" */}
+      {/*               : seg === 2052 */}
+      {/*                 ? "#f97316" */}
+      {/*                 : "transparent"; */}
+      {/*       return ( */}
+      {/*         <div */}
+      {/*           key={i} */}
+      {/*           style={{ */}
+      {/*             flex: 1, */}
+      {/*             background: bg, */}
+      {/*             opacity: bg === "transparent" ? 0 : 0.7, */}
+      {/*           }} */}
+      {/*         /> */}
+      {/*       ); */}
+      {/*     })} */}
+      {/*   </div> */}
+      {/* )} */}
     </div>
   );
 }

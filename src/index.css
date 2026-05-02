@@ -605,12 +605,28 @@ body,
 	grid-template-columns: 28px 38px 1fr 76px;
 	column-gap: 8px;
 	align-items: center;
+	overflow: hidden;
 }
 
 /* Expanded: pos | tyre+age | name+team | gap | int | lap_time | pit (all fixed — prevents 1fr spreading columns apart) */
+/* overflow: clip (not hidden) so position: sticky works on child name cell */
 .driver-table-expanded .driver-row {
-	grid-template-columns: 28px 34px 52px 62px 50px 66px 44px;
+	grid-template-columns: 28px 34px 52px 62px 50px 80px 44px;
 	column-gap: 3px;
+	overflow: clip;
+}
+
+/* Expanded container: horizontal scroll when rows wider than panel */
+.driver-table-expanded {
+	overflow-x: auto;
+}
+
+/* Sticky driver name in expanded mode only */
+.driver-table-expanded .driver-name-cell {
+	position: sticky;
+	left: 80px; /* 12px left-pad + 28px pos + 3px gap + 34px tyre + 3px gap */
+	z-index: 2;
+	background: var(--f1-dark);
 }
 
 /* Detail columns hidden until expanded */
@@ -814,4 +830,30 @@ body,
 	100% {
 		background-position: left;
 	}
+}
+
+/* Chequered flag celebration overlay */
+@keyframes checkered-drift {
+	from { background-position: 0 0; }
+	to   { background-position: 16px 16px; }
+}
+
+.header-chequered-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	background-image:
+		linear-gradient(45deg,  rgba(255,255,255,0.055) 25%, transparent 25%),
+		linear-gradient(-45deg, rgba(255,255,255,0.055) 25%, transparent 25%),
+		linear-gradient(45deg,  transparent 75%, rgba(255,255,255,0.055) 75%),
+		linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.055) 75%);
+	background-size: 16px 16px;
+	animation: checkered-drift 0.55s linear infinite;
+}
+
+/* Lap counter ambient glow — breathes in sync with the pulse animation */
+@keyframes lap-glow-breathe {
+	0%, 100% { opacity: 1; }
+	50%       { opacity: 0.6; }
 }

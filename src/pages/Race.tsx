@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useRaceData } from "../hooks/useRaceData";
+import { useCarData } from "../hooks/useCarData";
 import { useTrackMap } from "../hooks/useTrackMap";
 import { useRaceReplay } from "../hooks/useRaceReplay";
 import { openF1 } from "../api/openf1";
@@ -14,8 +15,7 @@ import TelemetryPanel from "../components/race/panels/TelemetryPanel";
 import RcTickerPanel from "../components/race/panels/RcTickerPanel";
 import OvertakeBanner from "../components/race/panels/OvertakeBanner";
 
-// Fixed layout heights (px)
-const HEADER_H = 48;
+// Fixed layout heights (px) — REPLAY_H / TICKER_H are stable; header is measured dynamically
 const REPLAY_H = 53;
 const TICKER_H = 32;
 
@@ -28,6 +28,19 @@ export default function Race() {
   // ── Panel widths (resizable) ─────────────────────────────────────────────
   const [leftW, setLeftW] = useState(370);
   const [rightW, setRightW] = useState(290);
+
+  // ── Header height — measured dynamically so panels never overlap it ───────
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(88); // 88px initial estimate
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setHeaderH(Math.ceil(entry.contentRect.height));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Session ──────────────────────────────────────────────────────────────
   const [session, setSession] = useState<Session | null>(null);
@@ -57,6 +70,11 @@ export default function Race() {
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
   const effectiveDriver =
     selectedDriver ?? race.positions[0]?.driver_number ?? null;
+  const { latest: carLatest, history: carHistory } = useCarData(
+    key,
+    effectiveDriver,
+    sessionDateEnd,
+  );
 
   const driverNumbers = useMemo(
     () => race.drivers.map((d) => d.driver_number),
@@ -175,6 +193,16 @@ export default function Race() {
   // ── Derived values ───────────────────────────────────────────────────────
   const currentLap = replayLaps.reduce((m, l) => Math.max(m, l.lap_number), 0);
 
+  const bestSectors = useMemo(() => {
+    let s1: number | null = null, s2: number | null = null, s3: number | null = null;
+    replayLaps.forEach((l) => {
+      if (l.duration_sector_1 !== null && (s1 === null || l.duration_sector_1 < s1)) s1 = l.duration_sector_1;
+      if (l.duration_sector_2 !== null && (s2 === null || l.duration_sector_2 < s2)) s2 = l.duration_sector_2;
+      if (l.duration_sector_3 !== null && (s3 === null || l.duration_sector_3 < s3)) s3 = l.duration_sector_3;
+    });
+    return { s1, s2, s3 };
+  }, [replayLaps]);
+
   const bannerOvertakingDriver = activeBannerOvertake
     ? race.drivers.find(
         (d) => d.driver_number === activeBannerOvertake.overtakingDriver,
@@ -209,7 +237,6 @@ export default function Race() {
   }, [replayLaps, effectiveDriver]);
 
   // ── Panel geometry ───────────────────────────────────────────────────────
-  const panelTop = HEADER_H;
   const panelBottom = REPLAY_H + TICKER_H;
 
   // ── Loading / error states ───────────────────────────────────────────────
@@ -337,16 +364,20 @@ export default function Race() {
         />
       </div>
 
-      {/* ── Layer 3: Header ───────────────────────────────────────────── */}
-      <div className="relative z-30" style={{ height: HEADER_H }}>
+      {/* ── Layer 3: Header — no fixed height; measured by ResizeObserver ── */}
+      <div ref={headerRef} className="relative z-30">
         <Header
           sessionName={sessionName}
           sessionType={sessionType}
           location={sessionLocation}
           currentLap={currentLap}
-          totalLaps={0}
+          totalLaps={race.totalLaps}
           weather={race.weather}
           raceControl={replayRaceControl}
+          sessionDateStart={sessionDateStart}
+          sessionDateEnd={sessionDateEnd}
+          replayTime={replay.replayTime}
+          bestSectors={bestSectors}
         />
       </div>
 
@@ -358,14 +389,14 @@ export default function Race() {
             overtake={activeBannerOvertake}
             overtakingDriver={bannerOvertakingDriver}
             overtakenDriver={bannerOvertakenDriver}
-            headerHeight={HEADER_H}
+            headerHeight={headerH}
             onDismiss={() => setActiveBannerOvertake(null)}
           />
         )}
 
       {/* ── Layer 2: Left panel — Standings ──────────────────────────── */}
       <StandingsPanel
-        top={panelTop}
+        top={headerH}
         bottom={panelBottom}
         width={leftW}
         onWidthChange={setLeftW}
@@ -399,12 +430,12 @@ export default function Race() {
       {/*   drivers={race.drivers} */}
       {/*   selectedDriver={effectiveDriver} */}
       {/* /> */}
-
+      {/**/}
       {/* ── Layer 2: Bottom ticker — Race control ─────────────────────── */}
       <RcTickerPanel
         messages={replayRaceControl}
         left={leftW}
-        right={rightW}
+        right={0}
         bottom={REPLAY_H}
         height={TICKER_H}
       />

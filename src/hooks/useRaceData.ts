@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { openF1 } from '../api/openf1'
 import type {
   Driver, Position, Interval, Lap, Stint,
-  Pit, RaceControl, TeamRadio, Weather, OvertakeEvent,
+  Pit, RaceControl, TeamRadio, Weather, OvertakeEvent, SessionResult,
 } from '../types'
 
 export interface RaceState {
@@ -18,6 +18,7 @@ export interface RaceState {
   weather: Weather | null
   overtakes: OvertakeEvent[]
   positionChanges: Record<number, 'up' | 'down'>
+  totalLaps: number
   loading: boolean
   error: string | null
 }
@@ -63,7 +64,7 @@ export function useRaceData(sessionKey: number, sessionDateEnd: string | null = 
     drivers: [], positions: [], allPositions: [], intervals: [], laps: [],
     stints: [], pits: [], raceControl: [], teamRadio: [],
     weather: null, overtakes: [], positionChanges: {},
-    loading: true, error: null,
+    totalLaps: 0, loading: true, error: null,
   })
 
   const prevPositionsRef = useRef<Position[]>([])
@@ -71,29 +72,39 @@ export function useRaceData(sessionKey: number, sessionDateEnd: string | null = 
   const changeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchAll = useCallback(async () => {
+    // Silently returns fallback on any error — non-critical data
+    async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
+      try { return await promise } catch { return fallback }
+    }
+
     try {
       const params = { session_key: sessionKey }
 
-      // Batch 1: critical display data
+      // Batch 1: critical — any failure here surfaces as an error
       const [drivers, positions, intervals] = await Promise.all([
         openF1.drivers(params),
         openF1.positions(params),
         openF1.intervals(params),
       ])
 
-      // Batch 2: lap/stint/pit data
+      // Batch 2: laps critical, stints/pits non-critical
       const [laps, stints, pits] = await Promise.all([
         openF1.laps(params),
-        openF1.stints(params),
-        openF1.pits(params),
+        safe(openF1.stints(params), []),
+        safe(openF1.pits(params), []),
       ])
 
-      // Batch 3: comms + weather
-      const [raceControl, teamRadio, weatherArr] = await Promise.all([
-        openF1.raceControl(params),
-        openF1.teamRadio(params),
-        openF1.weather(params),
+      // Batch 3: all non-critical — 404s here are silent
+      const [raceControl, teamRadio, weatherArr, sessionResult] = await Promise.all([
+        safe(openF1.raceControl(params), []),
+        safe(openF1.teamRadio(params), []),
+        safe(openF1.weather(params), []),
+        safe(openF1.sessionResult(params), [] as SessionResult[]),
       ])
+
+      const totalLaps = sessionResult.length
+        ? Math.max(...sessionResult.map((r) => r.number_of_laps ?? 0))
+        : 0
 
       // Latest position per driver, sorted
       const latestPositions = Object.values(
@@ -148,6 +159,7 @@ export function useRaceData(sessionKey: number, sessionDateEnd: string | null = 
           ? [...prev.overtakes.slice(-50), ...newOvertakes]
           : prev.overtakes,
         positionChanges: Object.keys(changes).length > 0 ? changes : prev.positionChanges,
+        totalLaps: totalLaps || prev.totalLaps,
         loading: false,
         error: null,
       }))

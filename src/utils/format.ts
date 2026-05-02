@@ -5,15 +5,19 @@ export function formatLapTime(seconds: number | null): string {
   return mins > 0 ? `${mins}:${secs}` : `${secs}s`
 }
 
-export function formatGap(gap: number | null): string {
+export function formatGap(gap: number | string | null): string {
   if (gap === null || gap === undefined) return '—'
-  if (gap === 0) return 'Leader'
-  return `+${gap.toFixed(3)}s`
+  const n = typeof gap === 'string' ? parseFloat(gap) : gap
+  if (isNaN(n)) return '—'
+  if (n === 0) return 'Leader'
+  return `+${n.toFixed(3)}s`
 }
 
-export function formatInterval(interval: number | null): string {
+export function formatInterval(interval: number | string | null): string {
   if (interval === null || interval === undefined) return '—'
-  return `+${interval.toFixed(3)}s`
+  const n = typeof interval === 'string' ? parseFloat(interval) : interval
+  if (isNaN(n)) return '—'
+  return `+${n.toFixed(3)}s`
 }
 
 export function formatSpeed(speed: number | null): string {

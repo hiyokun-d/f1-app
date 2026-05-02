@@ -1,213 +1,477 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Weather, RaceControl } from '../../types'
-import { flagColor } from '../../utils/format'
+import { useEffect, useRef, useState } from "react";
+import type { Weather, RaceControl } from "../../types";
+import { flagColor } from "../../utils/format";
+import AnimatedValue from "../common/AnimatedValue";
 
 interface Props {
-  sessionName: string
-  sessionType: string
-  location: string
-  currentLap: number
-  totalLaps: number
-  weather: Weather | null
-  raceControl: RaceControl[]
+  sessionName: string;
+  sessionType: string;
+  location: string;
+  currentLap: number;
+  totalLaps: number;
+  weather: Weather | null;
+  raceControl: RaceControl[];
+  sessionDateStart: string | null;
+  sessionDateEnd: string | null;
+  replayTime: Date | null;
+  bestSectors: { s1: number | null; s2: number | null; s3: number | null };
+}
+
+const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const MONTHS = [
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AUG",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DEC",
+];
+
+function fmtUTCTime(d: Date) {
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
+}
+
+// Softer colors for text/status use (fColor from flagColor() stays for strips/borders)
+function statusColor(flag: string): string {
+  switch (flag) {
+    case "GREEN":
+      return "#22c55e";
+    case "YELLOW":
+    case "DOUBLE YELLOW":
+      return "#ffd600";
+    case "RED":
+      return "#ef4444";
+    case "BLUE":
+      return "#60a5fa";
+    case "CHEQUERED":
+      return "#f0f0f0";
+    case "SAFETY CAR":
+      return "#f97316";
+    case "VIRTUAL SAFETY CAR":
+      return "#f59e0b";
+    default:
+      return "#6b7280";
+  }
+}
+
+function statusLabel(flag: string): string {
+  switch (flag) {
+    case "GREEN":
+      return "TRACK CLEAR";
+    case "YELLOW":
+      return "YELLOW FLAG";
+    case "DOUBLE YELLOW":
+      return "DBL YELLOW";
+    case "RED":
+      return "RED FLAG";
+    case "BLUE":
+      return "BLUE FLAG";
+    case "CHEQUERED":
+      return "CHEQUERED";
+    case "SAFETY CAR":
+      return "SAFETY CAR";
+    case "VIRTUAL SAFETY CAR":
+      return "VSC";
+    default:
+      return flag;
+  }
 }
 
 function WindArrow({ degrees }: { degrees: number }) {
   return (
-    <span style={{ display: 'inline-block', transform: `rotate(${degrees}deg)`, fontSize: 10 }}>↑</span>
-  )
-}
-
-function AnimatedNumber({ value }: { value: number }) {
-  const [display, setDisplay] = useState(value)
-  const [flash, setFlash] = useState(false)
-  const prevRef = useRef(value)
-
-  useEffect(() => {
-    if (prevRef.current !== value) {
-      setFlash(true)
-      const t = setTimeout(() => { setDisplay(value); setFlash(false) }, 80)
-      prevRef.current = value
-      return () => clearTimeout(t)
-    } else {
-      setDisplay(value)
-    }
-  }, [value])
-
-  return (
     <span
       style={{
-        display: 'inline-block',
-        transition: 'transform 0.08s ease, opacity 0.08s ease',
-        transform: flash ? 'translateY(-2px)' : 'translateY(0)',
-        opacity: flash ? 0.5 : 1,
-        fontFamily: 'var(--font-data)',
-        color: '#fff',
+        display: "inline-block",
+        transform: `rotate(${degrees}deg)`,
+        fontSize: 10,
       }}
     >
-      {display || '–'}
+      ↑
     </span>
-  )
+  );
+}
+
+function Stat({
+  label,
+  value,
+  hot,
+  blue,
+}: {
+  label: string;
+  value: string;
+  hot?: boolean;
+  blue?: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center">
+      <span
+        className="text-[9px] uppercase tracking-[0.15em] mb-0.5"
+        style={{ fontFamily: "var(--font-display)", color: "#5a6272" }}
+      >
+        {label}
+      </span>
+      <span
+        className="text-[11px] font-bold tabular-nums"
+        style={{
+          fontFamily: "var(--font-data)",
+          color: blue ? "#60a5fa" : hot ? "#f97316" : "#f0f0f0",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
 }
 
 export default function Header({
-  sessionName, sessionType, location,
-  currentLap, totalLaps, weather, raceControl,
+  sessionName,
+  sessionType,
+  currentLap,
+  totalLaps,
+  location,
+  raceControl,
+  sessionDateStart,
+  sessionDateEnd,
+  replayTime,
+  bestSectors,
+  weather,
 }: Props) {
-  const latestFlag = [...raceControl].reverse().find(r => r.flag)
-  const flagStr = latestFlag?.flag ?? 'GREEN'
-  const fColor = flagColor(flagStr)
-  const prevFlagRef = useRef(flagStr)
-  const [flagPulse, setFlagPulse] = useState(false)
-  const [flagBanner, setFlagBanner] = useState(false)
+  const latestFlag = [...raceControl].reverse().find((r) => r.flag);
+  const flagStr = latestFlag?.flag ?? "GREEN";
+  const fColor = flagColor(flagStr);
+  const sColor = statusColor(flagStr);
+  const isNonGreen = flagStr !== "GREEN";
+
+  const prevFlagRef = useRef(flagStr);
+  const [flagPulse, setFlagPulse] = useState(false);
+  const [flagBanner, setFlagBanner] = useState(false);
 
   useEffect(() => {
     if (prevFlagRef.current !== flagStr) {
-      prevFlagRef.current = flagStr
-      setFlagPulse(true)
-      setFlagBanner(true)
-      const t1 = setTimeout(() => setFlagPulse(false), 1500)
-      const t2 = setTimeout(() => setFlagBanner(false), 3000)
-      return () => { clearTimeout(t1); clearTimeout(t2) }
+      prevFlagRef.current = flagStr;
+      setFlagPulse(true);
+      setFlagBanner(true);
+      const t1 = setTimeout(() => setFlagPulse(false), 1500);
+      const t2 = setTimeout(() => setFlagBanner(false), 3000);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
     }
-  }, [flagStr])
+  }, [flagStr]);
 
-  const latestRC = raceControl[raceControl.length - 1]
+  // Live = sessionDateEnd within last hour
+  const isLive = sessionDateEnd
+    ? Date.now() - new Date(sessionDateEnd).getTime() < 3_600_000
+    : false;
+
+  const [liveClock, setLiveClock] = useState(() => new Date());
+  useEffect(() => {
+    if (!isLive) return;
+    const t = setInterval(() => setLiveClock(new Date()), 1000);
+    return () => clearInterval(t);
+  }, [isLive]);
+
+  const displayTime = isLive ? liveClock : replayTime;
+  const timeStr = displayTime ? fmtUTCTime(displayTime) : "--:--:--";
+
+  const sessionDate = sessionDateStart ? new Date(sessionDateStart) : null;
+  const dateStr = sessionDate
+    ? `${DAYS[sessionDate.getUTCDay()]} ${String(sessionDate.getUTCDate()).padStart(2, "0")} ${MONTHS[sessionDate.getUTCMonth()]} ${sessionDate.getUTCFullYear()}`
+    : null;
+
+  // Sector glow — fires when a new session-best is set
+  const [sectorGlow, setSectorGlow] = useState({
+    s1: false,
+    s2: false,
+    s3: false,
+  });
+  const prevBestRef = useRef(bestSectors);
+  useEffect(() => {
+    const prev = prevBestRef.current;
+    const glow = { s1: false, s2: false, s3: false };
+    let any = false;
+    if (
+      bestSectors.s1 !== null &&
+      (prev.s1 === null || bestSectors.s1 < prev.s1)
+    ) {
+      glow.s1 = true;
+      any = true;
+    }
+    if (
+      bestSectors.s2 !== null &&
+      (prev.s2 === null || bestSectors.s2 < prev.s2)
+    ) {
+      glow.s2 = true;
+      any = true;
+    }
+    if (
+      bestSectors.s3 !== null &&
+      (prev.s3 === null || bestSectors.s3 < prev.s3)
+    ) {
+      glow.s3 = true;
+      any = true;
+    }
+    prevBestRef.current = bestSectors;
+    if (!any) return;
+    setSectorGlow(glow);
+    const t = setTimeout(
+      () => setSectorGlow({ s1: false, s2: false, s3: false }),
+      2500,
+    );
+    return () => clearTimeout(t);
+  }, [bestSectors]);
+
+  const latestRC = raceControl[raceControl.length - 1];
 
   return (
     <header
-      className="shrink-0 relative"
+      className="shrink-0 relative flex flex-row justify-between"
       style={{
-        background: 'rgba(4,5,8,0.97)',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        background: isNonGreen
+          ? `linear-gradient(135deg, rgba(4,5,8,0.97) 0%, ${sColor}0a 50%, rgba(4,5,8,0.97) 100%)`
+          : "rgba(4,5,8,0.97)",
+        borderBottom: `1px solid ${isNonGreen ? `${sColor}28` : "rgba(255,255,255,0.07)"}`,
+        minHeight: 52,
+        transition: "background 0.6s ease, border-color 0.6s ease",
       }}
     >
-      {/* Flag change banner — slides down on flag change */}
-      {flagBanner && flagStr !== 'GREEN' && (
+      {/* Flag change banner */}
+      {flagBanner && isNonGreen && (
         <div
           className="absolute top-full left-0 right-0 z-50 flex items-center gap-3 px-4 py-2 animate-slide-down"
           style={{
             background: `${fColor}18`,
             borderBottom: `1px solid ${fColor}40`,
-            backdropFilter: 'blur(4px)',
+            backdropFilter: "blur(4px)",
           }}
         >
-          <div className="w-2 h-2 rounded-full animate-ping" style={{ background: fColor }} />
+          <div
+            className="w-2 h-2 rounded-full animate-ping"
+            style={{ background: fColor }}
+          />
           <span
             className="text-xs font-bold uppercase tracking-widest"
-            style={{ fontFamily: 'var(--font-display)', color: fColor }}
+            style={{ fontFamily: "var(--font-display)", color: fColor }}
           >
             {flagStr} FLAG
           </span>
           {latestRC?.message && (
-            <span className="text-xs text-[#9ca3af] truncate">{latestRC.message}</span>
+            <span className="text-xs text-[#9ca3af] truncate">
+              {latestRC.message}
+            </span>
           )}
         </div>
       )}
 
-      <div className="h-12 flex items-stretch">
-        {/* Flag color strip — animated */}
+      {/* ── LEFT — date / timestamp / status ── */}
+      <div className="flex items-stretch">
         <div
           className="w-1 shrink-0 transition-colors duration-300"
           style={{
             background: fColor,
-            boxShadow: flagPulse ? `0 0 12px ${fColor}` : 'none',
-            animation: flagPulse ? 'flag-pulse 1.5s ease-in-out' : 'none',
+            boxShadow: flagPulse ? `0 0 15px ${fColor}` : "none",
+            animation: flagPulse ? "flag-pulse 1.5s ease-in-out" : "none",
           }}
         />
-
-        {/* Session name */}
         <div
-          className="flex flex-col justify-center px-4 border-r"
-          style={{ borderColor: '#1f2330', minWidth: 220 }}
+          className="flex flex-col justify-center gap-1 px-5 py-3 border-r"
+          style={{ borderColor: "#1f2330", minWidth: 240 }}
         >
-          <div
-            className="text-[9px] uppercase tracking-[0.2em] leading-none mb-0.5"
-            style={{ fontFamily: 'var(--font-display)', color: '#5a6272' }}
-          >
-            {sessionType} · {location}
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[8px] font-bold uppercase tracking-[0.25em] self-start px-1.5 py-0.5"
+              style={{
+                fontFamily: "var(--font-display)",
+                color: fColor,
+                background: `${fColor}18`,
+                border: `1px solid ${fColor}30`,
+              }}
+            >
+              {sessionType}
+            </span>
+            <span
+              className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-[0.25em] px-1.5 py-0.5"
+              style={{
+                fontFamily: "var(--font-display)",
+                color: isLive ? "#22c55e" : "#f59e0b",
+                background: isLive
+                  ? "rgba(34,197,94,0.1)"
+                  : "rgba(245,158,11,0.1)",
+                border: `1px solid ${isLive ? "rgba(34,197,94,0.3)" : "rgba(245,158,11,0.3)"}`,
+              }}
+            >
+              {isLive && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full animate-pulse"
+                  style={{ background: "#22c55e" }}
+                />
+              )}
+              {isLive ? "LIVE" : "REPLAY"}
+            </span>
           </div>
-          <div
+          <span
             className="text-sm font-bold text-white leading-none uppercase tracking-wide"
-            style={{ fontFamily: 'var(--font-display)' }}
+            style={{ fontFamily: "var(--font-display)" }}
           >
-            {sessionName}
+            {location} {sessionName}
+          </span>
+          <div className="flex items-center gap-3">
+            {dateStr && (
+              <span
+                className="text-[9px] uppercase tracking-[0.1em]"
+                style={{ fontFamily: "var(--font-display)", color: "#5a6272" }}
+              >
+                {dateStr}
+              </span>
+            )}
+            <span
+              style={{
+                fontFamily: "var(--font-data)",
+                fontSize: 10,
+                color: "#4b5563",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {timeStr}
+              <span style={{ color: "#2e3444", marginLeft: 3 }}>UTC</span>
+            </span>
           </div>
         </div>
+      </div>
 
-        {/* Lap counter */}
+      {/* ── CENTER — lap counter + S1/S2/S3 best times ── */}
+      <div className="flex items-stretch">
         <div
-          className="flex items-center gap-2 px-4 border-r"
-          style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+          className="flex flex-col items-center justify-center border-l-4 border-r-4"
+          style={{
+            borderColor: fColor,
+            padding: "4px 20px 6px",
+            gap: 2,
+            transition: "border-color 0.4s ease",
+          }}
         >
           <span
-            className="text-[9px] uppercase tracking-[0.2em]"
-            style={{ fontFamily: 'var(--font-display)', color: '#5a6272' }}
+            className="text-[11px] uppercase tracking-[0.2em] font-bold"
+            style={{ fontFamily: "var(--font-display)", color: "#5a6270" }}
           >
             LAP
           </span>
-          <span className="text-xl font-black tabular-nums leading-none">
-            <AnimatedNumber value={currentLap} />
-          </span>
-          {totalLaps > 0 && (
-            <span className="text-sm" style={{ fontFamily: 'var(--font-data)', color: '#5a6272' }}>
-              /{totalLaps}
-            </span>
-          )}
-        </div>
-
-        {/* Flag badge */}
-        <div className="flex items-center px-4 border-r" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-          <div
-            className="flex items-center gap-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all duration-300"
-            style={{
-              fontFamily: 'var(--font-display)',
-              color: fColor,
-              background: `${fColor}15`,
-              border: `1px solid ${fColor}40`,
-              boxShadow: flagPulse ? `0 0 12px ${fColor}50` : 'none',
-              transform: flagPulse ? 'scale(1.05)' : 'scale(1)',
-            }}
-          >
-            <span
-              className="w-2 h-2 rounded-full"
+          <div className="flex items-baseline gap-1">
+            <AnimatedValue
+              value={currentLap}
               style={{
-                background: fColor,
-                animation: flagPulse ? 'flag-pulse 1.5s ease-in-out' : 'none',
+                fontFamily: "var(--font-data)",
+                color: "#fff",
+                fontSize: "1.5rem",
+                fontWeight: 900,
+                lineHeight: 1,
+                letterSpacing: "-0.02em",
               }}
             />
-            {flagStr}
+            {totalLaps > 0 && (
+              <span
+                className="text-sm"
+                style={{ fontFamily: "var(--font-data)", color: "#5a6272" }}
+              >
+                /{totalLaps}
+              </span>
+            )}
+          </div>
+
+          {/* S1 / S2 / S3 best time boxes */}
+          <div className="flex gap-1" style={{ marginTop: 4 }}>
+            {(["s1", "s2", "s3"] as const).map((key, i) => {
+              const val = bestSectors[key];
+              const glowing = sectorGlow[key];
+              return (
+                <div
+                  key={key}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    padding: "2px 5px",
+                    border: `1px solid ${glowing ? "rgba(192,132,252,0.55)" : "#1f2330"}`,
+                    boxShadow: glowing
+                      ? "0 0 10px rgba(192,132,252,0.55), 0 0 28px rgba(192,132,252,0.2)"
+                      : "none",
+                    transition:
+                      "border-color 0.35s ease, box-shadow 0.35s ease",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 6,
+                      fontWeight: 700,
+                      letterSpacing: "0.15em",
+                      color: glowing ? "#c084fc" : "#3a4258",
+                      transition: "color 0.35s ease",
+                    }}
+                  >
+                    S{i + 1}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-data)",
+                      fontSize: 8,
+                      letterSpacing: "-0.02em",
+                      color: glowing ? "#c084fc" : "#4b5563",
+                      transition: "color 0.35s ease",
+                    }}
+                  >
+                    {val !== null ? val.toFixed(3) : "—"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
+      </div>
 
-        {/* Latest RC message — scrolling if long */}
-        {latestRC && (
-          <div
-            className="flex items-center px-4 border-r overflow-hidden"
-            style={{ borderColor: '#1f2330', maxWidth: 280 }}
-          >
-            <p
-              className="text-[10px] truncate"
-              style={{ fontFamily: 'var(--font-display)', color: '#9ca3af' }}
-            >
-              {latestRC.message}
-            </p>
-          </div>
-        )}
-
+      {/* ── RIGHT — track status ── */}
+      <div className="flex items-stretch">
         {/* Weather — right */}
         {weather && (
-          <div className="flex items-center gap-5 px-4 ml-auto">
-            <Stat label="TRACK" value={`${weather.track_temperature.toFixed(0)}°`} hot={weather.track_temperature > 40} />
-            <Stat label="AIR" value={`${weather.air_temperature.toFixed(0)}°`} />
+          <div
+            className="flex items-center gap-5 ml-auto"
+            style={{
+              padding: "0 32px",
+            }}
+          >
+            <Stat
+              label="TRACK"
+              value={`${weather.track_temperature.toFixed(0)}°`}
+              hot={weather.track_temperature > 40}
+            />
+            <Stat
+              label="AIR"
+              value={`${weather.air_temperature.toFixed(0)}°`}
+            />
             <Stat label="HUM" value={`${weather.humidity.toFixed(0)}%`} />
             {weather.rainfall > 0 && (
               <Stat label="RAIN" value={`${weather.rainfall}mm`} blue />
             )}
             <div className="flex flex-col items-center">
-              <span className="text-[9px] uppercase tracking-[0.15em] mb-0.5" style={{ fontFamily: 'var(--font-display)', color: '#5a6272' }}>WIND</span>
-              <span className="text-[11px] font-bold tabular-nums text-white" style={{ fontFamily: 'var(--font-data)' }}>
-                {weather.wind_speed.toFixed(1)}<span style={{ color: '#5a6272' }}>km/h</span>{' '}
+              <span
+                className="text-[9px] uppercase tracking-[0.15em] mb-0.5"
+                style={{ fontFamily: "var(--font-display)", color: "#5a6272" }}
+              >
+                WIND
+              </span>
+              <span
+                className="text-[11px] font-bold tabular-nums text-white"
+                style={{ fontFamily: "var(--font-data)" }}
+              >
+                {weather.wind_speed.toFixed(1)}
+                <span style={{ color: "#5a6272" }}>km/h</span>{" "}
                 <WindArrow degrees={weather.wind_direction} />
               </span>
             </div>
@@ -215,19 +479,5 @@ export default function Header({
         )}
       </div>
     </header>
-  )
-}
-
-function Stat({ label, value, hot, blue }: { label: string; value: string; hot?: boolean; blue?: boolean }) {
-  return (
-    <div className="flex flex-col items-center">
-      <span className="text-[9px] uppercase tracking-[0.15em] mb-0.5" style={{ fontFamily: 'var(--font-display)', color: '#5a6272' }}>{label}</span>
-      <span
-        className="text-[11px] font-bold tabular-nums"
-        style={{ fontFamily: 'var(--font-data)', color: blue ? '#60a5fa' : hot ? '#f97316' : '#f0f0f0' }}
-      >
-        {value}
-      </span>
-    </div>
-  )
+  );
 }

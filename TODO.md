@@ -261,6 +261,63 @@ src/components/race/Header/
 
 ---
 
+## 📻 Team Radio — Mid-Race Playback + Alert System
+
+> Auto-play incoming team radio during the session, with a non-intrusive alert the user can skip.
+
+### Feature 1 — Random pick & auto-play
+
+- Poll `race.teamRadio` (already in `useRaceData`) for new entries since last check
+- On new entry: pick one at random if multiple arrive simultaneously
+- Play via `<audio>` tag through the `/f1-audio` Vite proxy (already wired for CORS)
+- Respect a cooldown: don't start a new clip if one is still playing + 5s gap between clips
+- Live only: disable auto-play when `isHistorical` (replay mode) to avoid spamming old clips
+
+### Feature 2 — Header driver visualization panel
+
+A new panel inside the header (right zone, or sliding overlay) that appears while a clip is playing:
+
+| Element | Details |
+|---|---|
+| Driver full name | `driver.full_name` — large display font |
+| Team name | `driver.team_name` — smaller, team color tint |
+| Team color bar | Left accent strip in `teamHex(driver.team_colour)` |
+| Waveform / pulse | Animated bars (CSS keyframe) simulating audio activity while playing |
+| Duration counter | Elapsed time of clip, e.g. `0:08` |
+
+- Panel slides in from right when clip starts (AnimeJS `translateX: [120px, 0]`), slides out on finish
+- Waveform bars: 5–7 bars, heights randomized each 120ms via `setInterval` while `audio.currentTime` advances
+- Fades out gracefully when clip ends or user skips
+
+### Feature 3 — Skip alert
+
+- Alert appears as a fixed toast (bottom-right, above replay controls) when a new clip starts
+- Shows: driver name + `"TEAM RADIO"` label + `[SKIP ▶]` button
+- Auto-dismisses after clip finishes
+- Skip button: pauses `audio.currentTime`, hides panel, logs skip (for cooldown logic)
+- Keyboard shortcut: `S` key skips current clip (only when alert is visible)
+
+### Files to create / modify
+
+```
+src/components/race/TeamRadio/
+  useTeamRadioPlayer.ts   # Hook: tracks queue, plays clips, exposes skip()
+  TeamRadioAlert.tsx      # Toast alert with skip button
+  TeamRadioPanel.tsx      # Animated driver visualization panel (header zone)
+```
+
+Modify:
+- `Race.tsx` — mount `<TeamRadioAlert>` and pass player state to Header
+- `Header.tsx` — render `<TeamRadioPanel>` in right zone while clip is active
+- `useRaceData.ts` — confirm `teamRadio` already updated on each poll (it is)
+
+### Open questions
+- [ ] Should replay mode play radios in chronological order as `replayTime` advances? (Nice-to-have)
+- [ ] Volume control — inherit system or expose a UI slider?
+- [ ] If multiple new radios arrive: queue them in order or just pick the latest?
+
+---
+
 ## DriverTable — remaining
 
 - [ ] Wire `data-rail-pit` and `data-rail-out` into the pit effect (background/label animates, rail does not yet)

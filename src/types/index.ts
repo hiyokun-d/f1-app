@@ -29,6 +29,7 @@ export interface Session {
   session_key: number
   session_name: string
   session_type: string
+  total_laps: number | null
   year: number
 }
 

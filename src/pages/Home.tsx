@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { animate, stagger } from "animejs";
+import { animate, stagger, createTimeline } from "animejs";
 import { useNextSession, type OpenF1Session } from "../hooks/useNextSession";
+import F1CarSVG from "../components/F1CarSVG";
 
 // ── Web Audio power-up SFX ────────────────────────────────────────────
 function playPowerUp(ctx: AudioContext) {
@@ -104,47 +105,6 @@ const BOOT_LINES = [
 const COLS = 7;
 const ROWS = 5;
 
-// ── F1 Car Wireframe ──────────────────────────────────────────────────
-function WireframeCar({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 360 160" className={className} style={{ filter: "drop-shadow(0 0 6px rgba(232,0,45,0.5))" }}>
-      <defs>
-        <filter id="carGlow">
-          <feGaussianBlur stdDeviation="2.5" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
-      <g filter="url(#carGlow)" stroke="#e8002d" strokeWidth="1" fill="none" opacity="0.85">
-        <path d="M 310,68 C 300,58 268,52 200,50 L 80,48 C 40,47 14,55 10,80 C 14,105 40,113 80,112 L 200,110 C 268,108 300,102 310,92 Z" />
-        <path d="M 310,68 L 350,75 L 350,85 L 310,92" strokeWidth="0.8" opacity="0.7" />
-        <path d="M 340,50 L 356,42 L 356,118 L 340,110 Z" strokeWidth="1.2" />
-        <line x1="356" y1="42" x2="356" y2="118" strokeWidth="0.5" opacity="0.4" />
-        <line x1="10" y1="80" x2="10" y2="80" strokeWidth="2" strokeLinecap="round" />
-        <rect x="0" y="36" width="16" height="88" rx="2" strokeWidth="1.2" />
-        <line x1="8" y1="36" x2="8" y2="124" strokeWidth="0.4" opacity="0.4" />
-        <ellipse cx="252" cy="40" rx="26" ry="10" />
-        <ellipse cx="252" cy="40" rx="14" ry="5" opacity="0.35" />
-        <ellipse cx="252" cy="120" rx="26" ry="10" />
-        <ellipse cx="252" cy="120" rx="14" ry="5" opacity="0.35" />
-        <ellipse cx="60" cy="40" rx="28" ry="11" />
-        <ellipse cx="60" cy="40" rx="15" ry="6" opacity="0.35" />
-        <ellipse cx="60" cy="120" rx="28" ry="11" />
-        <ellipse cx="60" cy="120" rx="15" ry="6" opacity="0.35" />
-        <line x1="240" y1="50" x2="228" y2="46" strokeWidth="0.7" opacity="0.6" />
-        <line x1="240" y1="110" x2="228" y2="114" strokeWidth="0.7" opacity="0.6" />
-        <line x1="72" y1="49" x2="86" y2="53" strokeWidth="0.7" opacity="0.6" />
-        <line x1="72" y1="111" x2="86" y2="107" strokeWidth="0.7" opacity="0.6" />
-        <ellipse cx="200" cy="80" rx="42" ry="17" />
-        <path d="M 130,60 C 180,58 220,58 290,63" strokeWidth="0.5" opacity="0.3" />
-        <path d="M 130,100 C 180,102 220,102 290,97" strokeWidth="0.5" opacity="0.3" />
-        <line x1="14" y1="80" x2="340" y2="80" strokeWidth="0.4" strokeDasharray="6 4" opacity="0.2" />
-        <path d="M 100,52 L 95,48 M 100,108 L 95,112" strokeWidth="0.6" opacity="0.5" />
-        <path d="M 160,51 L 160,48 M 160,109 L 160,112" strokeWidth="0.6" opacity="0.5" />
-      </g>
-    </svg>
-  );
-}
-
 // ── Countdown block ───────────────────────────────────────────────────
 function CountdownBlock({ label, value }: { label: string; value: number }) {
   return (
@@ -244,7 +204,6 @@ function QuickLaunchPanel({
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      {/* Status badge */}
       <div className="flex items-center gap-2">
         <div
           className="w-1.5 h-1.5 rounded-full"
@@ -258,7 +217,6 @@ function QuickLaunchPanel({
         </span>
       </div>
 
-      {/* Session info */}
       <div className="flex-1 flex flex-col justify-center gap-1">
         <div
           className="font-bold leading-tight text-white"
@@ -277,7 +235,6 @@ function QuickLaunchPanel({
         </div>
       </div>
 
-      {/* Launch button */}
       <button
         ref={btnRef}
         onClick={() => onNavigate(session.session_key)}
@@ -341,7 +298,6 @@ function FindSessionPanel({
       })
     : sessions;
 
-  // Animate result items in — runs synchronously before paint to prevent flash
   useLayoutEffect(() => {
     if (!resultsRef.current) return;
     const items = Array.from(resultsRef.current.querySelectorAll<HTMLElement>(".find-result-item"));
@@ -363,7 +319,6 @@ function FindSessionPanel({
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0">
-      {/* Text search */}
       <div className="relative shrink-0">
         <span
           className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] select-none pointer-events-none"
@@ -387,14 +342,12 @@ function FindSessionPanel({
         />
       </div>
 
-      {/* OR divider */}
       <div className="flex items-center gap-3 shrink-0">
         <div className="flex-1 h-px" style={{ background: "var(--f1-border)" }} />
         <span className="text-[9px] uppercase tracking-[0.2em]" style={{ fontFamily: "var(--font-display)", color: "#2e3444" }}>or</span>
         <div className="flex-1 h-px" style={{ background: "var(--f1-border)" }} />
       </div>
 
-      {/* Direct key input */}
       <div className="flex gap-2 shrink-0">
         <div className="relative flex-1">
           <span
@@ -438,7 +391,6 @@ function FindSessionPanel({
         )}
       </div>
 
-      {/* Results list */}
       <div
         ref={resultsRef}
         className="flex-1 flex flex-col gap-1 overflow-y-auto min-h-0"
@@ -537,7 +489,6 @@ function ActionPanel({
         flexShrink: 0,
       }}
     >
-      {/* Header */}
       <div
         className="flex items-center justify-between px-5 py-3 shrink-0"
         style={{ borderBottom: "1px solid var(--f1-border)" }}
@@ -553,7 +504,6 @@ function ActionPanel({
         )}
       </div>
 
-      {/* Tabs */}
       <div className="flex shrink-0" style={{ borderBottom: "1px solid var(--f1-border)" }}>
         {(["quick", "find"] as const).map(m => (
           <button
@@ -577,7 +527,6 @@ function ActionPanel({
         ))}
       </div>
 
-      {/* Content */}
       <div ref={contentRef} className="flex-1 p-4 overflow-hidden min-h-0 flex flex-col">
         {mode === "quick" ? (
           <QuickLaunchPanel
@@ -603,6 +552,10 @@ export default function Home() {
   const menuRef = useRef<HTMLDivElement>(null);
   const standbyRef = useRef<HTMLDivElement>(null);
   const menuAnimated = useRef(false);
+  const standbyCarRef = useRef<HTMLDivElement>(null);
+  const scanLineRef = useRef<HTMLDivElement>(null);
+  const carBreatheTlRef = useRef<ReturnType<typeof createTimeline> | null>(null);
+  const scanTlRef = useRef<ReturnType<typeof createTimeline> | null>(null);
 
   const [bootLines, setBootLines] = useState<string[]>([]);
   const [clock, setClock] = useState("");
@@ -635,6 +588,34 @@ export default function Home() {
     return () => clearInterval(iv);
   }, [nextSession]);
 
+  // Standby: car breathe + scan line loop
+  useEffect(() => {
+    if (phase !== "standby") return;
+    const carEl = standbyCarRef.current;
+    const scanEl = scanLineRef.current;
+    if (!carEl || !scanEl) return;
+
+    // Gentle breathe
+    carBreatheTlRef.current?.pause();
+    carBreatheTlRef.current = createTimeline({ loop: true });
+    carBreatheTlRef.current
+      .add(carEl, { opacity: [0.55, 0.85], duration: 2200, easing: "easeInOutSine" })
+      .add(carEl, { opacity: [0.85, 0.55], duration: 2200, easing: "easeInOutSine" });
+
+    // Scan line sweep over car
+    scanTlRef.current?.pause();
+    scanTlRef.current = createTimeline({ loop: true });
+    scanTlRef.current
+      .add(scanEl, { opacity: [0, 0], duration: 600 })
+      .add(scanEl, { translateY: ["-100%", "600%"], opacity: [0, 0.9, 0], duration: 1600, easing: "easeInOutQuart" })
+      .add(scanEl, { opacity: [0, 0], duration: 1800 });
+
+    return () => {
+      carBreatheTlRef.current?.pause();
+      scanTlRef.current?.pause();
+    };
+  }, [phase]);
+
   // Menu entrance — choreographed stagger
   useEffect(() => {
     if (phase !== "menu" || menuAnimated.current || !menuRef.current) return;
@@ -646,6 +627,15 @@ export default function Home() {
       translateY: [-30, 0],
       opacity: [0, 1],
       duration: 420,
+      easing: "easeOutExpo",
+    });
+
+    // t=80: car watermark fades in
+    animate(menu.querySelectorAll(".mc-car-bg"), {
+      opacity: [0, 1],
+      translateX: [40, 0],
+      duration: 900,
+      delay: 80,
       easing: "easeOutExpo",
     });
 
@@ -718,6 +708,16 @@ export default function Home() {
   const handleInitiate = useCallback(() => {
     if (phase !== "standby") return;
     try { const ctx = new AudioContext(); playPowerUp(ctx); } catch { /* ok */ }
+
+    // Flash car white before shattering
+    if (standbyCarRef.current) {
+      animate(standbyCarRef.current, {
+        opacity: [0.7, 1, 0],
+        duration: 400,
+        easing: "easeOutQuart",
+      });
+    }
+
     setPhase("shattering");
 
     requestAnimationFrame(() => {
@@ -759,20 +759,40 @@ export default function Home() {
       {/* ── MAIN MENU ── always rendered, revealed during shatter ────── */}
       <div
         ref={menuRef}
-        className={`absolute inset-0 flex flex-col speed-lines${phase !== "menu" ? " mc-menu-hidden" : ""}`}
+        className={`absolute inset-0 flex flex-col${phase !== "menu" ? " mc-menu-hidden" : ""}`}
+        style={{ opacity: 0 }}
       >
+        {/* Grid line background */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(232,0,45,0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(232,0,45,0.03) 1px, transparent 1px)
+            `,
+            backgroundSize: "60px 60px",
+          }}
+        />
+
         {/* Top status bar */}
         <div
-          className="mc-topbar flex items-center justify-between px-6 py-3 shrink-0"
-          style={{ borderBottom: "1px solid rgba(232,0,45,0.18)", background: "rgba(6,7,10,0.96)", backdropFilter: "blur(8px)" }}
+          className="mc-topbar flex items-center justify-between px-6 py-3 shrink-0 relative z-10"
+          style={{ borderBottom: "1px solid rgba(232,0,45,0.12)", background: "rgba(6,7,10,0.95)", backdropFilter: "blur(12px)" }}
         >
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 flex items-center justify-center" style={{ background: "var(--f1-red)" }}>
+            <div
+              className="w-7 h-7 flex items-center justify-center"
+              style={{ background: "var(--f1-red)", boxShadow: "0 0 16px rgba(232,0,45,0.5)" }}
+            >
               <span className="text-white font-black text-xs leading-none" style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.05em" }}>F1</span>
             </div>
             <div className="h-4 w-px bg-[#1f2330]" />
             <span className="text-[10px] uppercase tracking-[0.28em]" style={{ fontFamily: "var(--font-display)", color: "#3a4258" }}>
               Mission Control
+            </span>
+            <div className="h-4 w-px bg-[#1f2330]" />
+            <span className="text-[9px] uppercase tracking-[0.18em]" style={{ fontFamily: "var(--font-data)", color: "#2a2f40" }}>
+              Telemetry v2.0
             </span>
           </div>
           <div className="flex items-center gap-5">
@@ -794,14 +814,46 @@ export default function Home() {
         </div>
 
         {/* Content row: hero | action panel | info */}
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="flex flex-1 overflow-hidden min-h-0 relative">
 
           {/* Left — hero */}
           <div className="flex-1 flex flex-col justify-center px-12 gap-8 relative overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.07 }}>
-              <WireframeCar className="w-full max-w-2xl" />
+            {/* Car watermark — large background element */}
+            <div
+              className="mc-car-bg absolute pointer-events-none"
+              style={{
+                right: "-8%",
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: "72%",
+                opacity: 0,
+                filter: "drop-shadow(0 0 20px rgba(232,0,45,0.08))",
+              }}
+            >
+              <F1CarSVG className="w-full" />
             </div>
-            <div className="relative">
+
+            {/* Red accent line left edge */}
+            <div
+              className="absolute left-0 top-0 bottom-0 w-0.5 pointer-events-none"
+              style={{ background: "linear-gradient(to bottom, transparent, rgba(232,0,45,0.4) 30%, rgba(232,0,45,0.4) 70%, transparent)" }}
+            />
+
+            <div className="relative z-10">
+              {/* Eyebrow label */}
+              <div
+                className="flex items-center gap-3 mb-6"
+              >
+                <div className="w-8 h-px" style={{ background: "var(--f1-red)" }} />
+                <span
+                  className="text-[9px] uppercase tracking-[0.42em]"
+                  style={{ fontFamily: "var(--font-display)", color: "rgba(232,0,45,0.7)" }}
+                >
+                  F1 Telemetry Dashboard
+                </span>
+              </div>
+
+              {/* MISSION CONTROL lettering */}
               <div
                 className="select-none"
                 style={{
@@ -812,32 +864,39 @@ export default function Home() {
                   fontSize: "clamp(60px, 8.5vw, 116px)",
                 }}
               >
-                <div>
+                <div style={{ overflow: "hidden" }}>
                   {"MISSION".split("").map((l, i) => (
                     <span key={`m${i}`} className="mc-letter-row1 inline-block text-white">{l}</span>
                   ))}
                 </div>
-                <div>
+                <div style={{ overflow: "hidden" }}>
                   {"CONTROL".split("").map((l, i) => (
                     <span key={`c${i}`} className="mc-letter-row2 inline-block" style={{ color: "var(--f1-red)" }}>{l}</span>
                   ))}
                 </div>
               </div>
+
+              {/* Red underline */}
               <div
-                className="h-px mt-4"
-                style={{ background: "linear-gradient(90deg,var(--f1-red),transparent)", width: "clamp(200px,45%,480px)" }}
+                className="mt-5"
+                style={{
+                  height: 2,
+                  background: "linear-gradient(90deg, var(--f1-red), rgba(232,0,45,0.2), transparent)",
+                  width: "clamp(200px,55%,520px)",
+                }}
               />
+
+              <p
+                className="mc-tagline mt-5 text-[10px] uppercase tracking-[0.38em]"
+                style={{ fontFamily: "var(--font-display)", color: "#3a4258" }}
+              >
+                Season {new Date().getFullYear()} · Live Telemetry · Race Replay
+              </p>
             </div>
-            <p
-              className="mc-tagline text-[10px] uppercase tracking-[0.32em]"
-              style={{ fontFamily: "var(--font-display)", color: "#3a4258" }}
-            >
-              F1 Telemetry Dashboard · Season {new Date().getFullYear()}
-            </p>
           </div>
 
           {/* Center — action panel */}
-          <div className="flex items-center justify-center px-8 shrink-0">
+          <div className="flex items-center justify-center px-8 shrink-0 relative z-10">
             <ActionPanel
               liveSession={liveSession}
               latestSession={sessions[0] ?? null}
@@ -847,7 +906,7 @@ export default function Home() {
           </div>
 
           {/* Right — info panels */}
-          <div className="flex flex-col gap-4 px-6 py-8 shrink-0 overflow-y-auto" style={{ width: 280 }}>
+          <div className="flex flex-col gap-4 px-6 py-8 shrink-0 overflow-y-auto relative z-10" style={{ width: 280 }}>
             {nextSession && (
               <div
                 className="mc-card"
@@ -913,7 +972,11 @@ export default function Home() {
         </div>
 
         {/* Bottom session carousel */}
-        <div className="shrink-0 px-8 pb-6">
+        <div className="shrink-0 px-8 pb-6 relative z-10">
+          <div
+            className="h-px w-full mb-5"
+            style={{ background: "linear-gradient(90deg, transparent, rgba(232,0,45,0.3) 30%, rgba(232,0,45,0.3) 70%, transparent)" }}
+          />
           <div className="text-[9px] uppercase tracking-[0.28em] mb-3" style={{ fontFamily: "var(--font-display)", color: "#2e3444" }}>
             Recent Sessions
           </div>
@@ -923,8 +986,6 @@ export default function Home() {
             ))}
           </div>
         </div>
-
-        <div className="h-px w-full shrink-0" style={{ background: "linear-gradient(90deg,transparent,var(--f1-red) 40%,transparent)" }} />
       </div>
 
       {/* ── STANDBY + SHATTER LAYERS ─────────────────────────────────── */}
@@ -950,48 +1011,151 @@ export default function Home() {
 
           <div
             ref={standbyRef}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-7 speed-lines"
-            style={{ zIndex: 20, pointerEvents: phase === "standby" ? "auto" : "none" }}
+            className="absolute inset-0 flex flex-col items-center justify-center"
+            style={{ zIndex: 20, pointerEvents: phase === "standby" ? "auto" : "none", gap: 0 }}
           >
+            {/* Grid background */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage: `
+                  linear-gradient(rgba(232,0,45,0.04) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(232,0,45,0.04) 1px, transparent 1px)
+                `,
+                backgroundSize: "48px 48px",
+              }}
+            />
+
+            {/* Corner brackets */}
             {(["tl", "tr", "bl", "br"] as const).map(pos => (
               <div
                 key={pos}
-                className="absolute w-9 h-9"
+                className="absolute"
                 style={{
-                  top: pos[0] === "t" ? 32 : undefined,
-                  bottom: pos[0] === "b" ? 32 : undefined,
-                  left: pos[1] === "l" ? 32 : undefined,
-                  right: pos[1] === "r" ? 32 : undefined,
-                  borderTop: pos[0] === "t" ? "2px solid rgba(232,0,45,0.28)" : undefined,
-                  borderBottom: pos[0] === "b" ? "2px solid rgba(232,0,45,0.28)" : undefined,
-                  borderLeft: pos[1] === "l" ? "2px solid rgba(232,0,45,0.28)" : undefined,
-                  borderRight: pos[1] === "r" ? "2px solid rgba(232,0,45,0.28)" : undefined,
+                  width: 48,
+                  height: 48,
+                  top: pos[0] === "t" ? 28 : undefined,
+                  bottom: pos[0] === "b" ? 28 : undefined,
+                  left: pos[1] === "l" ? 28 : undefined,
+                  right: pos[1] === "r" ? 28 : undefined,
+                  borderTop: pos[0] === "t" ? "1.5px solid rgba(232,0,45,0.35)" : undefined,
+                  borderBottom: pos[0] === "b" ? "1.5px solid rgba(232,0,45,0.35)" : undefined,
+                  borderLeft: pos[1] === "l" ? "1.5px solid rgba(232,0,45,0.35)" : undefined,
+                  borderRight: pos[1] === "r" ? "1.5px solid rgba(232,0,45,0.35)" : undefined,
                   animation: "corner-blink 3s ease-in-out infinite",
                   animationDelay: pos === "tr" || pos === "bl" ? "1.5s" : "0s",
                 }}
               />
             ))}
 
-            <div className="w-11 h-11 flex items-center justify-center" style={{ background: "var(--f1-red)", boxShadow: "0 0 24px rgba(232,0,45,0.4)" }}>
-              <span className="text-white font-black text-base leading-none" style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.05em" }}>F1</span>
+            {/* Horizontal rule top */}
+            <div
+              className="absolute top-0 left-0 right-0 h-px pointer-events-none"
+              style={{ background: "linear-gradient(90deg, transparent 5%, rgba(232,0,45,0.2) 30%, rgba(232,0,45,0.2) 70%, transparent 95%)" }}
+            />
+
+            {/* F1 logo */}
+            <div
+              className="flex items-center gap-3 mb-8"
+              style={{ animation: "fade-in 0.5s ease forwards" }}
+            >
+              <div
+                className="w-10 h-10 flex items-center justify-center shrink-0"
+                style={{ background: "var(--f1-red)", boxShadow: "0 0 28px rgba(232,0,45,0.5)" }}
+              >
+                <span className="text-white font-black text-sm leading-none" style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.05em" }}>F1</span>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.42em]" style={{ fontFamily: "var(--font-display)", color: "rgba(232,0,45,0.6)" }}>
+                  Mission Control
+                </div>
+                <div className="text-[8px] uppercase tracking-[0.28em] mt-0.5" style={{ fontFamily: "var(--font-data)", color: "#2a2f40" }}>
+                  Telemetry System · v2.0
+                </div>
+              </div>
             </div>
 
-            <WireframeCar className="w-full max-w-sm" />
+            {/* Car — large centerpiece */}
+            <div
+              className="relative mb-6"
+              style={{ width: "min(560px, 55vw)", animation: "fade-in 0.8s ease 0.2s both" }}
+            >
+              {/* Glow behind car */}
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  inset: "25% 10% 0 10%",
+                  background: "radial-gradient(ellipse at 50% 80%, rgba(232,0,45,0.18) 0%, transparent 70%)",
+                  filter: "blur(20px)",
+                }}
+              />
 
-            <div className="text-center -mt-2">
-              <div className="text-[10px] uppercase tracking-[0.5em] mb-1.5" style={{ fontFamily: "var(--font-display)", color: "rgba(232,0,45,0.5)" }}>
+              {/* Car itself */}
+              <div ref={standbyCarRef} style={{ opacity: 0.65 }}>
+                <F1CarSVG className="w-full" />
+              </div>
+
+              {/* Scan line that sweeps over car */}
+              <div
+                ref={scanLineRef}
+                className="absolute inset-x-0 pointer-events-none"
+                style={{
+                  top: 0,
+                  height: "3px",
+                  background: "linear-gradient(90deg, transparent 0%, rgba(232,0,45,0.7) 20%, rgba(255,255,255,0.9) 50%, rgba(232,0,45,0.7) 80%, transparent 100%)",
+                  boxShadow: "0 0 12px rgba(232,0,45,0.8)",
+                  opacity: 0,
+                }}
+              />
+
+              {/* Side decorative lines */}
+              <div
+                className="absolute top-1/2 -left-6 w-4 h-px pointer-events-none"
+                style={{ background: "rgba(232,0,45,0.3)", transform: "translateY(-50%)" }}
+              />
+              <div
+                className="absolute top-1/2 -right-6 w-4 h-px pointer-events-none"
+                style={{ background: "rgba(232,0,45,0.3)", transform: "translateY(-50%)" }}
+              />
+            </div>
+
+            {/* STANDBY label */}
+            <div className="text-center mb-6">
+              <div className="text-[8px] uppercase tracking-[0.6em] mb-2" style={{ fontFamily: "var(--font-display)", color: "rgba(232,0,45,0.4)" }}>
                 System Status
               </div>
-              <div className="text-3xl font-black uppercase tracking-[0.18em]" style={{ fontFamily: "var(--font-display)", color: "#3a4258" }}>
+              <div
+                className="font-black uppercase tracking-[0.22em]"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "clamp(22px, 3vw, 36px)",
+                  color: "#2a3040",
+                  letterSpacing: "0.22em",
+                  animation: "flag-pulse 3s ease-in-out infinite",
+                }}
+              >
                 STANDBY
               </div>
             </div>
 
-            <div style={{ fontFamily: "var(--font-data)", fontSize: 10, color: "#2e3444", minHeight: 96, width: 320 }}>
+            {/* Boot lines */}
+            <div
+              style={{
+                fontFamily: "var(--font-data)",
+                fontSize: 10,
+                color: "#2e3444",
+                minHeight: 96,
+                width: "min(340px, 80vw)",
+                background: "rgba(14,16,21,0.6)",
+                border: "1px solid rgba(232,0,45,0.07)",
+                padding: "12px 14px",
+                marginBottom: 24,
+              }}
+            >
               {bootLines.map((line, i) => (
                 <div key={i} className="flex items-start gap-2 mb-1" style={{ animation: "fade-in 0.3s ease forwards" }}>
-                  <span style={{ color: i === bootLines.length - 1 ? "rgba(232,0,45,0.5)" : "#2a2d35", flexShrink: 0 }}>›</span>
-                  <span style={{ color: line.includes("[OK]") ? "#2e3444" : i === bootLines.length - 1 ? "rgba(232,0,45,0.65)" : "#2e3444" }}>
+                  <span style={{ color: i === bootLines.length - 1 ? "rgba(232,0,45,0.5)" : "#252830", flexShrink: 0 }}>›</span>
+                  <span style={{ color: line.includes("[OK]") ? "#3a4560" : i === bootLines.length - 1 ? "rgba(232,0,45,0.65)" : "#2e3444" }}>
                     {line}
                   </span>
                 </div>
@@ -1001,29 +1165,59 @@ export default function Home() {
               )}
             </div>
 
+            {/* Initiate button */}
             <button
               onClick={handleInitiate}
               className="relative overflow-hidden"
               style={{
                 background: "rgba(232,0,45,0.05)",
                 border: "1px solid rgba(232,0,45,0.35)",
-                padding: "13px 44px",
+                padding: "16px 56px",
                 cursor: "pointer",
                 animation: "glow-red 2.2s ease-in-out infinite",
+                minWidth: 260,
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = "rgba(232,0,45,0.1)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(232,0,45,0.6)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = "rgba(232,0,45,0.05)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(232,0,45,0.35)";
               }}
             >
+              {/* Scan sweep */}
               <div
-                className="absolute inset-x-0 h-7 pointer-events-none"
+                className="absolute inset-x-0 h-8 pointer-events-none"
                 style={{ top: 0, background: "linear-gradient(180deg,rgba(232,0,45,0.1),transparent)", animation: "scan 2s ease-in-out infinite" }}
               />
-              <span className="relative text-[12px] font-bold uppercase tracking-[0.45em]" style={{ fontFamily: "var(--font-display)", color: "rgba(232,0,45,0.85)" }}>
+              {/* Corner accents */}
+              <div className="absolute top-1 left-1 w-2 h-2 border-t border-l" style={{ borderColor: "rgba(232,0,45,0.5)" }} />
+              <div className="absolute top-1 right-1 w-2 h-2 border-t border-r" style={{ borderColor: "rgba(232,0,45,0.5)" }} />
+              <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l" style={{ borderColor: "rgba(232,0,45,0.5)" }} />
+              <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r" style={{ borderColor: "rgba(232,0,45,0.5)" }} />
+              <span className="relative text-[12px] font-bold uppercase tracking-[0.5em]" style={{ fontFamily: "var(--font-display)", color: "rgba(232,0,45,0.85)" }}>
                 Initiate System
               </span>
             </button>
 
-            <div className="absolute bottom-7 text-[9px] uppercase tracking-[0.3em]" style={{ fontFamily: "var(--font-display)", color: "#1f2330" }}>
-              F1 Telemetry Dashboard · Ready
+            {/* Bottom label */}
+            <div
+              className="absolute bottom-7 flex items-center gap-4"
+              style={{ animation: "fade-in 1s ease 2s both" }}
+            >
+              <div className="h-px w-12" style={{ background: "rgba(232,0,45,0.15)" }} />
+              <span className="text-[8px] uppercase tracking-[0.35em]" style={{ fontFamily: "var(--font-display)", color: "#1f2330" }}>
+                F1 Telemetry Dashboard · Ready
+              </span>
+              <div className="h-px w-12" style={{ background: "rgba(232,0,45,0.15)" }} />
             </div>
+
+            {/* Horizontal rule bottom */}
+            <div
+              className="absolute bottom-0 left-0 right-0 h-px pointer-events-none"
+              style={{ background: "linear-gradient(90deg, transparent 5%, rgba(232,0,45,0.15) 30%, rgba(232,0,45,0.15) 70%, transparent 95%)" }}
+            />
           </div>
         </>
       )}

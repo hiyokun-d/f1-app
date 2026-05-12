@@ -980,3 +980,48 @@ body,
     opacity: 0.6;
   }
 }
+
+/* ── Mission Control initial states (AnimeJS owns opacity/transform) ──
+   Must be CSS — inline style props get reset on every React re-render. */
+.mc-letter,
+.mc-topbar,
+.mc-card,
+.session-tile,
+.mc-tagline {
+  opacity: 0;
+}
+
+/* Menu hidden until AnimeJS animates it in during shattering phase.
+   AnimeJS inline style wins over this class (inline specificity > class). */
+.mc-menu-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* SVG wireframe car stroke-draw effect */
+@keyframes stroke-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.car-path-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: stroke-draw 2.4s ease-in-out forwards;
+  pathLength: 1;
+}
+
+/* Mission Control menu reveal from shatter */
+@keyframes mc-warp-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

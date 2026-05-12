@@ -124,7 +124,7 @@ function Stat({
           color: blue ? "#60a5fa" : hot ? "#f97316" : "#f0f0f0",
         }}
       >
-value}
+        {value}
       </span>
     </div>
   );
@@ -484,7 +484,8 @@ export default function Header({
             borderColor: fColor,
             padding: "4px 20px 6px",
             gap: 2,
-            transition: "border-color 0.4s ease, width 0.",
+            minWidth: currentLap >= 100 ? 158 : currentLap >= 10 ? 138 : 118,
+            transition: "border-color 0.4s ease, min-width 0.3s ease",
           }}
         >
           <span

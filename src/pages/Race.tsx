@@ -31,7 +31,7 @@ export default function Race() {
 
   // ── Header height — measured dynamically so panels never overlap it ───────
   const headerRef = useRef<HTMLDivElement>(null);
-  const [headerH, setHeaderH] = useState(88); // 88px initial estimate
+  const [headerH, setHeaderH] = useState(64); // 64px initial estimate
   useEffect(() => {
     const el = headerRef.current;
     if (!el) return;

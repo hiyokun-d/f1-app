@@ -614,6 +614,48 @@ body,
 }
 
 /* ── Driver table layout ─────────────────────────────────────────── */
+
+/* Wrapper: full-width in compact so 1fr expands and GAP sits at right edge */
+.driver-table-wrapper {
+  width: 100%;
+}
+.driver-table-expanded .driver-table-wrapper {
+  display: inline-block;
+  vertical-align: top;
+  width: auto;
+}
+
+/* GAP cell: right-anchored in compact, centered in expanded */
+.driver-gap-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+}
+.driver-table-expanded .driver-gap-cell {
+  justify-content: center;
+  text-align: center;
+}
+
+/* Last driver compact: swap gap→lap-time; expanded: swap back */
+.last-driver-gap .gap-value {
+  display: none;
+}
+.last-driver-gap .last-time-value {
+  display: block;
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: -0.03em;
+  color: #6b7280;
+  text-align: right;
+}
+.driver-table-expanded .last-driver-gap .gap-value {
+  display: block;
+}
+.driver-table-expanded .last-driver-gap .last-time-value {
+  display: none;
+}
+
 /* Compact: pos | tyre | name+badges | gap */
 .driver-row {
   display: grid;

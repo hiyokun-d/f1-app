@@ -209,9 +209,7 @@ export default function DriverTable({
         ref={containerRef}
         className="flex-1 overflow-y-auto overflow-x-auto min-h-0"
       >
-        {/* inline-block forces this wrapper to shrink to its content width (column sum),
-            preventing rows from stretching to the panel width and causing false empty space */}
-        <div style={{ display: "inline-block", verticalAlign: "top" }}>
+        <div className="driver-table-wrapper">
           <div
             className="driver-row driver-header-row"
             style={{ padding: "4px 8px 4px 12px" }}
@@ -222,7 +220,7 @@ export default function DriverTable({
               TYR
             </div>
             <div className="driver-name-cell driver-col-label">DRIVER</div>
-            <div className="driver-col-label" style={{ textAlign: "center" }}>
+            <div className="driver-col-label driver-gap-cell">
               GAP
             </div>
             <div className="driver-detail driver-col-label justify-end">
@@ -260,6 +258,7 @@ export default function DriverTable({
               onSelectDriver={onSelectDriver}
               currentlap={currentlap}
               totalLaps={totalLaps}
+              isLast={idx === displayPositions.length - 1}
             />
           ))}
         </div>

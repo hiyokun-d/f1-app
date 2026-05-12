@@ -48,8 +48,9 @@ interface DriverRowProps {
   drsDriver: number | null;
   drsActive: boolean;
   onSelectDriver: (dn: number) => void;
-  totalLaps: number;
-  currentlap: number;
+  totalLaps: number | null;
+  currentlap: number | null;
+  isLast: boolean;
 }
 
 export function DriverRow({
@@ -74,6 +75,7 @@ export function DriverRow({
   onSelectDriver,
   currentlap,
   totalLaps,
+  isLast,
 }: DriverRowProps) {
   const driver = driverMap.get(pos.driver_number);
   const interval = intervalMap.get(pos.driver_number);
@@ -399,12 +401,10 @@ export function DriverRow({
               {driver?.name_acronym ?? "???"}
             </span>
             {activeBadges.map((v) => {
-              if (v === "fl") {
+              if (v === "fl") return <StatusBadge key={v} variant={v} />;
+              if (currentlap !== null && totalLaps !== null && currentlap <= totalLaps - 2)
                 return <StatusBadge key={v} variant={v} />;
-              }
-
-              if (currentlap <= totalLaps - 2)
-                return <StatusBadge key={v} variant={v} />;
+              return null;
             })}
           </div>
           <div className="flex items-center gap-1 min-w-0">
@@ -430,15 +430,23 @@ export function DriverRow({
         </div>
       </div>
 
-      {/* Gap to leader — animated; crossfades with pit duration on pit exit */}
-      <div className="text-center" style={{ position: "relative" }}>
-        <span data-gap-text={pos.driver_number} style={{ display: "block" }}>
+      {/* Gap to leader — compact mode: last driver shows lap time instead */}
+      <div
+        className={`driver-gap-cell${isLast ? " last-driver-gap" : ""}`}
+        style={{ position: "relative" }}
+      >
+        <span className="gap-value" data-gap-text={pos.driver_number}>
           <GapDisplay
             gap={interval?.gap_to_leader ?? null}
             intervalGap={isLeader ? null : (interval?.interval ?? null)}
             isLeader={isLeader}
           />
         </span>
+        {isLast && lapDuration !== null && (
+          <span className="last-time-value">
+            {formatLapTime(lapDuration)}
+          </span>
+        )}
         {pitDuration != null && !isLeader && (
           <span
             data-pit-inline={pos.driver_number}
@@ -451,7 +459,6 @@ export function DriverRow({
               justifyContent: "flex-end",
             }}
           >
-            {/* {pitDuration.toFixed(1)}s */}
             <AnimatedValue value={pitDuration.toFixed(1)} />s
           </span>
         )}

@@ -194,11 +194,25 @@ export default function Race() {
   const currentLap = replayLaps.reduce((m, l) => Math.max(m, l.lap_number), 0);
 
   const bestSectors = useMemo(() => {
-    let s1: number | null = null, s2: number | null = null, s3: number | null = null;
+    let s1: number | null = null,
+      s2: number | null = null,
+      s3: number | null = null;
     replayLaps.forEach((l) => {
-      if (l.duration_sector_1 !== null && (s1 === null || l.duration_sector_1 < s1)) s1 = l.duration_sector_1;
-      if (l.duration_sector_2 !== null && (s2 === null || l.duration_sector_2 < s2)) s2 = l.duration_sector_2;
-      if (l.duration_sector_3 !== null && (s3 === null || l.duration_sector_3 < s3)) s3 = l.duration_sector_3;
+      if (
+        l.duration_sector_1 !== null &&
+        (s1 === null || l.duration_sector_1 < s1)
+      )
+        s1 = l.duration_sector_1;
+      if (
+        l.duration_sector_2 !== null &&
+        (s2 === null || l.duration_sector_2 < s2)
+      )
+        s2 = l.duration_sector_2;
+      if (
+        l.duration_sector_3 !== null &&
+        (s3 === null || l.duration_sector_3 < s3)
+      )
+        s3 = l.duration_sector_3;
     });
     return { s1, s2, s3 };
   }, [replayLaps]);
@@ -416,8 +430,9 @@ export default function Race() {
       />
 
       {/* ── Layer 2: Right panel — Telemetry + Radio ─────────────────── */}
+
       {/* <TelemetryPanel */}
-      {/*   top={panelTop} */}
+      {/*   top={headerH} */}
       {/*   bottom={panelBottom} */}
       {/*   width={rightW} */}
       {/*   onWidthChange={setRightW} */}
@@ -431,6 +446,7 @@ export default function Race() {
       {/*   selectedDriver={effectiveDriver} */}
       {/* /> */}
       {/**/}
+
       {/* ── Layer 2: Bottom ticker — Race control ─────────────────────── */}
       <RcTickerPanel
         messages={replayRaceControl}

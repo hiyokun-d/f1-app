@@ -52,3 +52,24 @@ export function teamHex(colour: string | undefined): string {
   if (!colour) return '#888888'
   return colour.startsWith('#') ? colour : `#${colour}`
 }
+
+const F1_COUNTRY_MAP: Record<string, string> = {
+  // ISO alpha-3
+  AUS: 'AU', AUT: 'AT', BEL: 'BE', BRA: 'BR', CAN: 'CA',
+  CHN: 'CN', DNK: 'DK', FIN: 'FI', FRA: 'FR', DEU: 'DE',
+  GBR: 'GB', ITA: 'IT', JPN: 'JP', MCO: 'MC', MEX: 'MX',
+  NLD: 'NL', NZL: 'NZ', POL: 'PL', PRT: 'PT', RUS: 'RU',
+  ESP: 'ES', SWE: 'SE', CHE: 'CH', THA: 'TH', USA: 'US',
+  ARG: 'AR', ZAF: 'ZA', HKG: 'HK',
+  // IOC / F1 codes
+  NED: 'NL', GER: 'DE', DEN: 'DK', MON: 'MC', POR: 'PT',
+  SUI: 'CH', RSA: 'ZA',
+};
+
+export function countryToFlag(code: string): string {
+  const alpha2 = F1_COUNTRY_MAP[code.toUpperCase()];
+  if (!alpha2) return code;
+  return alpha2.split('').map(c =>
+    String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)
+  ).join('');
+}

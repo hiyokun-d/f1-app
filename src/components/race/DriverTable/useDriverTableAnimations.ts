@@ -222,14 +222,23 @@ export function useDriverTableAnimations({
   // ── 4. Layout + ResizeObserver for compact/expanded breakpoint ────────────
   useEffect(() => {
     if (!containerRef.current) return;
-    layout.current = createLayout(containerRef.current, {
+    const c = containerRef.current;
+
+    // Pre-apply expanded class without animation if already wide enough on mount.
+    // Must happen before createLayout so the layout lib sees elements already
+    // visible and skips the enterFrom animation for initial render.
+    const initialExpand = c.getBoundingClientRect().width >= 380;
+    let expanded = initialExpand;
+    if (initialExpand) c.classList.add("driver-table-expanded");
+
+    layout.current = createLayout(c, {
       children: ".driver-detail",
       enterFrom: { opacity: 0, x: -10 },
       leaveTo: { opacity: 0, x: -10 },
       duration: 380,
       ease: "inOut(3)",
     });
-    let expanded = false;
+
     const ro = new ResizeObserver(([entry]) => {
       const shouldExpand = entry.contentRect.width >= 380;
       if (shouldExpand === expanded || !layout.current) return;
@@ -238,7 +247,7 @@ export function useDriverTableAnimations({
         root.classList.toggle("driver-table-expanded", shouldExpand);
       });
     });
-    ro.observe(containerRef.current);
+    ro.observe(c);
     return () => {
       ro.disconnect();
       layout.current?.revert();

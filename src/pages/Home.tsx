@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 const TITLE_LETTERS = ["R", "A", "C", "E", " ", "C", "E", "N", "T", "E", "R"];
 
 const SESSION = {
-  key: 9141,
+  key: 9165, // SMOOTHHHH OPERATOR
   name: "Belgium Grand Prix",
   subtitle: "Sprint Race · Spa-Francorchamps",
   date: "29 JUL 2023",

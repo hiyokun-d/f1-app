@@ -54,7 +54,7 @@ export default function StandingsPanel({
 }: Props) {
   return (
     <div
-      className="absolute z-20 flex flex-col overflow-hidden"
+      className="absolute z-20 flex flex-col"
       style={{
         top,
         bottom,
@@ -104,7 +104,7 @@ export default function StandingsPanel({
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0">
         <DriverTable
           sessionKey={sessionKey}
           sessionDateEnd={sessionDateEnd}

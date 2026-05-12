@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Weather, RaceControl } from "../../types";
 import { flagColor } from "../../utils/format";
 import AnimatedValue from "../common/AnimatedValue";
+import { animate, createTimeline, spring } from "animejs";
 
 interface Props {
   sessionName: string;
@@ -166,6 +167,133 @@ export default function Header({
     }
   }, [flagStr]);
 
+  // ── AnimeJS: chequered / black-and-white flag animations ─────────
+  const headerRef = useRef<HTMLElement>(null);
+  const chqOverlayRef = useRef<HTMLDivElement>(null);
+  const activeFlagTlRef = useRef<ReturnType<typeof createTimeline> | null>(
+    null,
+  );
+  const prevFlagAnimRef = useRef<string | null>(null);
+
+  // Set initial state on mount without animation (e.g. page load of a finished race)
+  useLayoutEffect(() => {
+    const overlay = chqOverlayRef.current;
+    if (!overlay) return;
+    prevFlagAnimRef.current = flagStr;
+    if (flagStr === "CHEQUERED") {
+      overlay.style.opacity = "0.35";
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (prevFlagAnimRef.current === null) return; // layoutEffect hasn't run yet
+    if (prevFlagAnimRef.current === flagStr) return;
+    const prev = prevFlagAnimRef.current;
+    prevFlagAnimRef.current = flagStr;
+
+    if (activeFlagTlRef.current) {
+      activeFlagTlRef.current.pause();
+      activeFlagTlRef.current = null;
+    }
+
+    const overlay = chqOverlayRef.current;
+    const header = headerRef.current;
+    if (!overlay || !header) return;
+
+    if (flagStr === "CHEQUERED") {
+      const tl = createTimeline();
+      activeFlagTlRef.current = tl;
+
+      // Header drops in with a spring
+      tl.add(
+        header,
+        {
+          translateY: [-5, 0],
+          duration: 700,
+          ease: spring({ stiffness: 380, damping: 14, mass: 0.85 }),
+        },
+        0,
+      );
+
+      // Overlay sweeps in
+      tl.add(
+        overlay,
+        {
+          opacity: [0, 0.7],
+          duration: 1100,
+          ease: "outCubic",
+        },
+        0,
+      );
+
+      // White glow pulse across the header
+      // tl.add(
+      //   header,
+      //   {
+      //     boxShadow: [
+      //       "0 0 0px rgba(255,255,255,0)",
+      //       "0 3px 60px rgba(255,255,255,0.6), 0 -2px 40px rgba(255,255,255,0.3)",
+      //       "0 1px 12px rgba(255,255,255,0.08)",
+      //     ],
+      //     duration: 3200,
+      //     ease: "outCubic",
+      //   },
+      //   80,
+      // );
+
+      // Settle overlay at reduced opacity
+      tl.add(
+        overlay,
+        {
+          opacity: [0.7, 0.35],
+          duration: 2400,
+          ease: "outSine",
+        },
+        1300,
+      );
+    } else if (flagStr === "BLACK AND WHITE") {
+      const tl = createTimeline();
+      activeFlagTlRef.current = tl;
+
+      // Strobe-flash the overlay twice then clear
+      tl.add(
+        overlay,
+        {
+          opacity: [0, 0.5, 0, 0.4, 0],
+          duration: 1800,
+          ease: "linear",
+        },
+        0,
+      );
+      tl.add(
+        header,
+        {
+          boxShadow: [
+            "0 0 0px rgba(255,255,255,0)",
+            "0 2px 30px rgba(255,255,255,0.45)",
+            "0 0 0px rgba(255,255,255,0)",
+            "0 2px 22px rgba(255,255,255,0.3)",
+            "0 0 0px rgba(255,255,255,0)",
+          ],
+          duration: 1800,
+          ease: "linear",
+        },
+        0,
+      );
+    } else if (prev === "CHEQUERED") {
+      // Fade out overlay when leaving CHEQUERED
+      animate(overlay, {
+        opacity: [0.35, 0],
+        duration: 1400,
+        ease: "outQuart",
+      });
+      animate(header, {
+        boxShadow: "0 0 0px rgba(255,255,255,0)",
+        duration: 800,
+      });
+    }
+  }, [flagStr]);
+
   // Live = sessionDateEnd within last hour
   const isLive = sessionDateEnd
     ? Date.now() - new Date(sessionDateEnd).getTime() < 3_600_000
@@ -232,6 +360,7 @@ export default function Header({
 
   return (
     <header
+      ref={headerRef}
       className="shrink-0 relative flex flex-row justify-between"
       style={{
         background: isNonGreen
@@ -242,33 +371,34 @@ export default function Header({
         transition: "background 0.6s ease, border-color 0.6s ease",
       }}
     >
-      {/* Flag change banner */}
-      {flagBanner && isNonGreen && (
-        <div
-          className="absolute top-full left-0 right-0 z-50 flex items-center gap-3 px-4 py-2 animate-slide-down"
-          style={{
-            background: `${fColor}18`,
-            borderBottom: `1px solid ${fColor}40`,
-            backdropFilter: "blur(4px)",
-          }}
-        >
+      {/* Checkered / penalty overlay — AnimeJS owns opacity */}
+      <div className="header-chequered-overlay" ref={chqOverlayRef} />
+
+      {/* Flag change banner — skip CHEQUERED/BLACK AND WHITE, they have dedicated AnimeJS animations */}
+      {flagBanner &&
+        isNonGreen &&
+        flagStr !== "CHEQUERED" &&
+        flagStr !== "BLACK AND WHITE" && (
           <div
-            className="w-2 h-2 rounded-full animate-ping"
-            style={{ background: fColor }}
-          />
-          <span
-            className="text-xs font-bold uppercase tracking-widest"
-            style={{ fontFamily: "var(--font-display)", color: fColor }}
+            className="absolute top-full left-0 right-0 z-50 flex items-center gap-3 px-4 py-2 animate-slide-down"
+            style={{
+              background: `${fColor}22`,
+              borderBottom: `1px solid ${fColor}40`,
+            }}
           >
-            {flagStr} FLAG
-          </span>
-          {latestRC?.message && (
-            <span className="text-xs text-[#9ca3af] truncate">
-              {latestRC.message}
+            <span
+              className="text-xs font-bold uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-display)", color: fColor }}
+            >
+              {flagStr} FLAG
             </span>
-          )}
-        </div>
-      )}
+            {latestRC?.message && (
+              <span className="text-xs text-[#9ca3af] truncate">
+                {latestRC.message}
+              </span>
+            )}
+          </div>
+        )}
 
       {/* ── LEFT — date / timestamp / status ── */}
       <div className="flex items-stretch">

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type {
   Driver,
   Position,
@@ -8,14 +9,113 @@ import type {
 } from "../../../types";
 import {
   formatLapTime,
-  formatGap,
   formatInterval,
   teamHex,
+  countryToFlag,
 } from "../../../utils/format";
 import { TYRE_COLORS, TYRE_LIFE_LAPS, type BadgeVariant } from "./constants";
 import { StatusBadge } from "./StatusBadge";
 import { TyreBadge } from "./TyreBadge";
 import { PositionNumber } from "./PositionNumber";
+import AnimatedValue from "../../common/AnimatedValue";
+import { animate } from "animejs";
+
+// ── GapDisplay: animated slot-machine number + proximity glow ─────────────
+// gap = gap_to_leader (null during live races); intervalGap = gap to car ahead (fallback)
+function GapDisplay({ gap, intervalGap, isLeader }: { gap: number | null; intervalGap: number | null; isLeader: boolean }) {
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const prevGapRef = useRef<number | null>(null);
+  const hasInitRef = useRef(false);
+
+  // Prefer gap_to_leader; fall back to interval (car ahead) for live races
+  const displayGap = gap ?? intervalGap;
+  const isIntervalFallback = gap === null && intervalGap !== null;
+
+  const color =
+    isLeader
+      ? "#ffd600"
+      : displayGap === null
+        ? "#4b5563"
+        : displayGap <= 0.5
+          ? "#4ade80"
+          : displayGap <= 1.0
+            ? "#22c55e"
+            : displayGap <= 2.0
+              ? "#eab308"
+              : "#4b5563";
+
+  useEffect(() => {
+    if (!hasInitRef.current) {
+      hasInitRef.current = true;
+      prevGapRef.current = displayGap;
+      return;
+    }
+    if (displayGap === null || isLeader || displayGap === prevGapRef.current) return;
+    prevGapRef.current = displayGap;
+    if (!wrapRef.current || displayGap > 2) return;
+
+    const glowColor =
+      displayGap <= 0.5
+        ? "rgba(74,222,128,"
+        : displayGap <= 1.0
+          ? "rgba(34,197,94,"
+          : "rgba(234,179,8,";
+
+    animate(wrapRef.current, {
+      filter: [
+        `drop-shadow(0 0 0px ${glowColor}0))`,
+        `drop-shadow(0 0 14px ${glowColor}0.95))`,
+        `drop-shadow(0 0 5px ${glowColor}0.4))`,
+        `drop-shadow(0 0 0px ${glowColor}0))`,
+      ],
+      duration: 950,
+      ease: "outCubic",
+    });
+  }, [displayGap, isLeader]);
+
+  if (isLeader) {
+    return (
+      <AnimatedValue
+        value="LEAD"
+        style={{
+          fontFamily: "var(--font-data)",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "-0.03em",
+          color: "#ffd600",
+        }}
+      />
+    );
+  }
+
+  if (displayGap === null) {
+    return (
+      <span style={{ fontFamily: "var(--font-data)", fontSize: 11, letterSpacing: "-0.03em", color: "#4b5563" }}>
+        —
+      </span>
+    );
+  }
+
+  const cleanGap = parseFloat(displayGap.toFixed(3));
+  const isClose = displayGap <= 2;
+
+  return (
+    <span ref={wrapRef} style={{ display: "inline-flex", alignItems: "baseline" }}>
+      <span style={{ fontFamily: "var(--font-data)", fontSize: 10, color, opacity: isIntervalFallback ? 0.4 : 0.6 }}>+</span>
+      <AnimatedValue
+        value={cleanGap}
+        style={{
+          fontFamily: "var(--font-data)",
+          fontSize: 11,
+          fontWeight: isClose ? 600 : 400,
+          letterSpacing: "-0.03em",
+          color,
+        }}
+      />
+      <span style={{ fontFamily: "var(--font-data)", fontSize: 9, color, opacity: 0.55, marginLeft: 1 }}>s</span>
+    </span>
+  );
+}
 
 interface DriverRowProps {
   pos: Position;
@@ -359,54 +459,66 @@ export function DriverRow({
         )}
       </div>
 
-      {/* Driver name + badges + team sub-label (team only visible in expanded) */}
-      <div className="driver-name-cell flex flex-col justify-center min-w-0">
-        <div className="flex items-center gap-1 min-w-0 overflow-hidden">
-          <span
-            className="truncate min-w-0"
-            style={{
-              fontFamily: "var(--font-display)",
-              fontWeight: 700,
-              fontSize: 13,
-              letterSpacing: "0.025em",
-              color: isLeader ? "#ffd600" : isSelected ? "#ffffff" : "#d1d5db",
-            }}
-          >
-            {driver?.name_acronym ?? "???"}
-          </span>
-          {activeBadges.map((v) => (
-            <StatusBadge key={v} variant={v} />
-          ))}
+      {/* Driver name + badges + headshot + country (headshot/country only in expanded) */}
+      <div className="driver-name-cell flex items-center gap-1.5 min-w-0">
+        {driver?.headshot_url && (
+          <img
+            src={driver.headshot_url}
+            alt={driver.name_acronym}
+            className="driver-headshot"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            style={{ borderColor: `${teamColor}55` }}
+          />
+        )}
+        <div className="flex flex-col justify-center min-w-0 flex-1">
+          <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+            <span
+              className="truncate min-w-0"
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: 13,
+                letterSpacing: "0.025em",
+                color: isLeader ? "#ffd600" : isSelected ? "#ffffff" : "#d1d5db",
+              }}
+            >
+              {driver?.name_acronym ?? "???"}
+            </span>
+            {activeBadges.map((v) => (
+              <StatusBadge key={v} variant={v} />
+            ))}
+          </div>
+          <div className="flex items-center gap-1 min-w-0">
+            <span
+              className="driver-team-sub truncate"
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 7,
+                letterSpacing: "0.08em",
+                lineHeight: 1,
+                marginTop: 1,
+                color: `${teamColor}60`,
+              }}
+            >
+              {driver?.team_name?.toUpperCase() ?? ""}
+            </span>
+            {driver?.country_code && (
+              <span className="driver-country-flag" style={{ marginTop: 1 }}>
+                {countryToFlag(driver.country_code)}
+              </span>
+            )}
+          </div>
         </div>
-        <span
-          className="driver-team-sub truncate"
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 7,
-            letterSpacing: "0.08em",
-            lineHeight: 1,
-            marginTop: 1,
-            color: `${teamColor}60`,
-          }}
-        >
-          {driver?.team_name?.toUpperCase() ?? ""}
-        </span>
       </div>
 
-      {/* Gap to leader — crossfades with pit duration on pit exit */}
+      {/* Gap to leader — animated; crossfades with pit duration on pit exit */}
       <div className="text-right" style={{ position: "relative" }}>
-        <span
-          data-gap-text={pos.driver_number}
-          style={{
-            fontFamily: "var(--font-data)",
-            fontSize: 11,
-            fontWeight: isLeader ? 700 : 400,
-            letterSpacing: "-0.03em",
-            color: isLeader ? "#ffd600" : "#4b5563",
-            display: "block",
-          }}
-        >
-          {isLeader ? "LEAD" : formatGap(interval?.gap_to_leader ?? null)}
+        <span data-gap-text={pos.driver_number} style={{ display: "block" }}>
+          <GapDisplay
+            gap={interval?.gap_to_leader ?? null}
+            intervalGap={isLeader ? null : (interval?.interval ?? null)}
+            isLeader={isLeader}
+          />
         </span>
         {pitDuration != null && !isLeader && (
           <span
@@ -425,18 +537,33 @@ export function DriverRow({
         )}
       </div>
 
-      {/* Interval [expanded] */}
-      <div className="driver-detail justify-end">
+      {/* Interval + current lap# [expanded] */}
+      <div className="driver-detail" style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}>
         <span
           style={{
             fontFamily: "var(--font-data)",
             fontSize: 10,
             color: "#6b7280",
             letterSpacing: "-0.02em",
+            lineHeight: 1,
           }}
         >
           {isLeader ? "—" : formatInterval(interval?.interval ?? null)}
         </span>
+        {lastLap?.lap_number ? (
+          <span
+            style={{
+              fontFamily: "var(--font-data)",
+              fontSize: 7,
+              lineHeight: 1,
+              marginTop: 2,
+              letterSpacing: "-0.01em",
+              color: "#2e3444",
+            }}
+          >
+            L{lastLap.lap_number}
+          </span>
+        ) : null}
       </div>
 
       {/* Last lap + personal best sub-label [expanded] */}
@@ -524,6 +651,36 @@ export function DriverRow({
               )}
             </div>
           )}
+
+        {/* Speed trap */}
+        {lastLap?.st_speed != null && !lastLap?.is_pit_out_lap && (
+          <div
+            className="driver-detail"
+            style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 2 }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 6,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                color: "#2e3444",
+              }}
+            >
+              ST
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-data)",
+                fontSize: 6,
+                letterSpacing: "-0.01em",
+                color: lastLap.st_speed >= 320 ? "#f97316" : lastLap.st_speed >= 300 ? "#eab308" : "#4b5563",
+              }}
+            >
+              {lastLap.st_speed}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Pit duration + lap number sub-label [expanded] */}

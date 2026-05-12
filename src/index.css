@@ -624,15 +624,40 @@ body,
 }
 
 /* Expanded: pos | tyre+age | name+headshot | gap | int | lap_time | pit */
+/* min-width: max-content forces rows wider than the panel so the container can scroll */
 .driver-table-expanded .driver-row {
-  grid-template-columns: 28px 36px minmax(80px, 110px) 74px 70px 96px 56px;
+  grid-template-columns: 28px 36px 110px 74px 70px 96px 56px;
   column-gap: 8px;
   overflow: hidden;
+  min-width: max-content;
 }
 
 /* Expanded container: horizontal scroll when rows wider than panel */
 .driver-table-expanded {
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+.driver-table-expanded:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.driver-table-expanded::-webkit-scrollbar {
+  height: 3px;
+}
+.driver-table-expanded::-webkit-scrollbar-track {
+  background: transparent;
+}
+.driver-table-expanded::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.3s ease;
+}
+.driver-table-expanded:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+.driver-table-expanded::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* Driver headshot avatar — hidden compact, shown expanded */

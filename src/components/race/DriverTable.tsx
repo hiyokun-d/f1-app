@@ -428,7 +428,7 @@ export default function DriverTable({
   useEffect(() => {
     if (!driverLayout.current || hasAnimated.current || positions.length === 0)
       return;
-    // hasAnimated.current = true;
+    hasAnimated.current = true;
     const s = createScope({ root: driverLayout.current });
     s.add(() => {
       animate(".driver-row", {

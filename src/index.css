@@ -624,12 +624,10 @@ body,
 }
 
 /* Expanded: pos | tyre+age | name+headshot | gap | int | lap_time | pit */
-/* min-width: max-content forces rows wider than the panel so the container can scroll */
 .driver-table-expanded .driver-row {
   grid-template-columns: 28px 36px 110px 74px 70px 96px 56px;
   column-gap: 8px;
   overflow: hidden;
-  min-width: max-content;
 }
 
 /* Expanded container: horizontal scroll when rows wider than panel */
@@ -693,6 +691,12 @@ body,
 .driver-table-expanded .driver-detail {
   display: flex;
   align-items: center;
+  animation: detail-enter 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes detail-enter {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 /* Sub-labels inside cells — only visible in expanded mode */

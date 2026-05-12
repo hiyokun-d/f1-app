@@ -22,7 +22,15 @@ import { animate } from "animejs";
 
 // ── GapDisplay: animated slot-machine number + proximity glow ─────────────
 // gap = gap_to_leader (null during live races); intervalGap = gap to car ahead (fallback)
-function GapDisplay({ gap, intervalGap, isLeader }: { gap: number | null; intervalGap: number | null; isLeader: boolean }) {
+function GapDisplay({
+  gap,
+  intervalGap,
+  isLeader,
+}: {
+  gap: number | null;
+  intervalGap: number | null;
+  isLeader: boolean;
+}) {
   const wrapRef = useRef<HTMLSpanElement>(null);
   const prevGapRef = useRef<number | null>(null);
   const hasInitRef = useRef(false);
@@ -31,18 +39,17 @@ function GapDisplay({ gap, intervalGap, isLeader }: { gap: number | null; interv
   const displayGap = gap ?? intervalGap;
   const isIntervalFallback = gap === null && intervalGap !== null;
 
-  const color =
-    isLeader
-      ? "#ffd600"
-      : displayGap === null
-        ? "#4b5563"
-        : displayGap <= 0.5
-          ? "#4ade80"
-          : displayGap <= 1.0
-            ? "#22c55e"
-            : displayGap <= 2.0
-              ? "#eab308"
-              : "#4b5563";
+  const color = isLeader
+    ? "#ffd600"
+    : displayGap === null
+      ? "#4b5563"
+      : displayGap <= 0.5
+        ? "#4ade80"
+        : displayGap <= 1.0
+          ? "#22c55e"
+          : displayGap <= 2.0
+            ? "#eab308"
+            : "#4b5563";
 
   useEffect(() => {
     if (!hasInitRef.current) {
@@ -50,7 +57,8 @@ function GapDisplay({ gap, intervalGap, isLeader }: { gap: number | null; interv
       prevGapRef.current = displayGap;
       return;
     }
-    if (displayGap === null || isLeader || displayGap === prevGapRef.current) return;
+    if (displayGap === null || isLeader || displayGap === prevGapRef.current)
+      return;
     prevGapRef.current = displayGap;
     if (!wrapRef.current || displayGap > 2) return;
 
@@ -90,7 +98,14 @@ function GapDisplay({ gap, intervalGap, isLeader }: { gap: number | null; interv
 
   if (displayGap === null) {
     return (
-      <span style={{ fontFamily: "var(--font-data)", fontSize: 11, letterSpacing: "-0.03em", color: "#4b5563" }}>
+      <span
+        style={{
+          fontFamily: "var(--font-data)",
+          fontSize: 11,
+          letterSpacing: "-0.03em",
+          color: "#4b5563",
+        }}
+      >
         —
       </span>
     );
@@ -100,8 +115,20 @@ function GapDisplay({ gap, intervalGap, isLeader }: { gap: number | null; interv
   const isClose = displayGap <= 2;
 
   return (
-    <span ref={wrapRef} style={{ display: "inline-flex", alignItems: "baseline" }}>
-      <span style={{ fontFamily: "var(--font-data)", fontSize: 10, color, opacity: isIntervalFallback ? 0.4 : 0.6 }}>+</span>
+    <span
+      ref={wrapRef}
+      style={{ display: "inline-flex", alignItems: "baseline" }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-data)",
+          fontSize: 10,
+          color,
+          opacity: isIntervalFallback ? 0.4 : 0.6,
+        }}
+      >
+        +
+      </span>
       <AnimatedValue
         value={cleanGap}
         style={{
@@ -112,7 +139,17 @@ function GapDisplay({ gap, intervalGap, isLeader }: { gap: number | null; interv
           color,
         }}
       />
-      <span style={{ fontFamily: "var(--font-data)", fontSize: 9, color, opacity: 0.55, marginLeft: 1 }}>s</span>
+      <span
+        style={{
+          fontFamily: "var(--font-data)",
+          fontSize: 9,
+          color,
+          opacity: 0.55,
+          marginLeft: 1,
+        }}
+      >
+        s
+      </span>
     </span>
   );
 }
@@ -466,7 +503,9 @@ export function DriverRow({
             src={driver.headshot_url}
             alt={driver.name_acronym}
             className="driver-headshot"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
             style={{ borderColor: `${teamColor}55` }}
           />
         )}
@@ -479,7 +518,11 @@ export function DriverRow({
                 fontWeight: 700,
                 fontSize: 13,
                 letterSpacing: "0.025em",
-                color: isLeader ? "#ffd600" : isSelected ? "#ffffff" : "#d1d5db",
+                color: isLeader
+                  ? "#ffd600"
+                  : isSelected
+                    ? "#ffffff"
+                    : "#d1d5db",
               }}
             >
               {driver?.name_acronym ?? "???"}
@@ -538,7 +581,10 @@ export function DriverRow({
       </div>
 
       {/* Interval + current lap# [expanded] */}
-      <div className="driver-detail" style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}>
+      <div
+        className="driver-detail"
+        style={{ flexDirection: "column", alignItems: "flex-end", gap: 0 }}
+      >
         <span
           style={{
             fontFamily: "var(--font-data)",
@@ -656,7 +702,12 @@ export function DriverRow({
         {lastLap?.st_speed != null && !lastLap?.is_pit_out_lap && (
           <div
             className="driver-detail"
-            style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 2 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              marginTop: 2,
+            }}
           >
             <span
               style={{
@@ -674,7 +725,12 @@ export function DriverRow({
                 fontFamily: "var(--font-data)",
                 fontSize: 6,
                 letterSpacing: "-0.01em",
-                color: lastLap.st_speed >= 320 ? "#f97316" : lastLap.st_speed >= 300 ? "#eab308" : "#4b5563",
+                color:
+                  lastLap.st_speed >= 320
+                    ? "#f97316"
+                    : lastLap.st_speed >= 300
+                      ? "#eab308"
+                      : "#4b5563",
               }}
             >
               {lastLap.st_speed}

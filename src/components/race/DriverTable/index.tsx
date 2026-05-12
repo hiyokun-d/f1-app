@@ -168,6 +168,9 @@ export default function DriverTable({
   return (
     <div className="h-full flex flex-col" style={{ background: "transparent" }}>
       <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-auto min-h-0">
+        {/* inline-block forces this wrapper to shrink to its content width (column sum),
+            preventing rows from stretching to the panel width and causing false empty space */}
+        <div style={{ display: "inline-block", verticalAlign: "top" }}>
         <div className="driver-row driver-header-row" style={{ padding: "4px 8px 4px 12px" }}>
           <div />
           <div className="driver-col-label" style={{ textAlign: "center" }}>TYR</div>
@@ -202,6 +205,7 @@ export default function DriverTable({
             onSelectDriver={onSelectDriver}
           />
         ))}
+        </div>{/* end inline-block wrapper */}
 
         {positions.length === 0 && (
           <div className="flex items-center justify-center h-24">

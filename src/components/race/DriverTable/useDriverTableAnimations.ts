@@ -8,14 +8,12 @@ import {
 } from "react";
 import {
   animate,
-  createLayout,
   createScope,
   createTimeline,
   cubicBezier,
   spring,
   stagger,
 } from "animejs";
-import type { AutoLayout } from "animejs";
 import type { Position, OvertakeEvent } from "../../../types";
 
 const currentEasing = cubicBezier(0.683, 0.284, 0.28, 1.289);
@@ -60,7 +58,6 @@ export function useDriverTableAnimations({
 }: AnimationProps): void {
   // ── Internal refs ─────────────────────────────────────────────────────────
   const hasAnimated = useRef(false);
-  const layout = useRef<AutoLayout | null>(null);
   const prevPitRef = useRef(new Map<number, string>());
   const prevOvertakesLenRef = useRef(-1);
   const prevDrsRef = useRef<{
@@ -219,40 +216,25 @@ export function useDriverTableAnimations({
     rowPositionsRef.current = new Map();
   }, [displayPositions]);
 
-  // ── 4. Layout + ResizeObserver for compact/expanded breakpoint ────────────
+  // ── 4. ResizeObserver for compact/expanded breakpoint ────────────────────
+  // createLayout was removed — it set styles on containerRef (the scroll root)
+  // that blocked overflow-x: auto. CSS animation handles the enter effect instead.
   useEffect(() => {
     if (!containerRef.current) return;
     const c = containerRef.current;
 
-    // Pre-apply expanded class without animation if already wide enough on mount.
-    // Must happen before createLayout so the layout lib sees elements already
-    // visible and skips the enterFrom animation for initial render.
     const initialExpand = c.getBoundingClientRect().width >= 380;
     let expanded = initialExpand;
     if (initialExpand) c.classList.add("driver-table-expanded");
 
-    layout.current = createLayout(c, {
-      children: ".driver-detail",
-      enterFrom: { opacity: 0, x: -10 },
-      leaveTo: { opacity: 0, x: -10 },
-      duration: 380,
-      ease: "inOut(3)",
-    });
-
     const ro = new ResizeObserver(([entry]) => {
       const shouldExpand = entry.contentRect.width >= 380;
-      if (shouldExpand === expanded || !layout.current) return;
+      if (shouldExpand === expanded) return;
       expanded = shouldExpand;
-      layout.current.update(({ root }) => {
-        root.classList.toggle("driver-table-expanded", shouldExpand);
-      });
+      c.classList.toggle("driver-table-expanded", shouldExpand);
     });
     ro.observe(c);
-    return () => {
-      ro.disconnect();
-      layout.current?.revert();
-      layout.current = null;
-    };
+    return () => ro.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 5. Pit overlay animation ──────────────────────────────────────────────

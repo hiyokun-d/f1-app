@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { animate } from 'animejs'
 import type { Driver, CarData, Lap, Stint, TeamRadio } from '../../../types'
 import Telemetry from '../Telemetry'
 import TeamRadioPlayer from '../TeamRadioPlayer'
@@ -6,8 +7,6 @@ import ResizeHandle from '../ResizeHandle'
 
 interface Props {
   // Layout
-  top: number
-  bottom: number
   width: number
   onWidthChange: (w: number) => void
   // Telemetry
@@ -23,12 +22,22 @@ interface Props {
 }
 
 export default function TelemetryPanel({
-  top, bottom, width, onWidthChange,
+  width, onWidthChange,
   driver, latest, history, lastLap, currentStint,
   radio, drivers, selectedDriver,
 }: Props) {
   const [splitPct, setSplitPct] = useState(58)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    animate(containerRef.current, {
+      opacity: [0, 1],
+      x: [20, 0],
+      duration: 360,
+      ease: 'outExpo',
+    })
+  }, [])
 
   const handleVerticalDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -55,9 +64,10 @@ export default function TelemetryPanel({
   return (
     <div
       ref={containerRef}
-      className="absolute z-20 flex flex-col overflow-hidden"
+      className="relative h-full shrink-0 flex flex-col overflow-hidden"
       style={{
-        top, bottom, right: 0, width,
+        width,
+        opacity: 0,
         background: 'rgba(5,6,9,0.92)',
         backdropFilter: 'blur(6px)',
         borderLeft: '1px solid rgba(255,255,255,0.07)',

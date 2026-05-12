@@ -63,7 +63,7 @@ export default function RaceControlFeed({ messages }: Props) {
             const isNew = i >= sorted.length - 3
             return (
               <div
-                key={`${msg.date}-${i}`}
+                key={`${msg.date}-${msg.message}`}
                 className={`flex items-start gap-2 px-3 py-1.5 text-xs border-l-2 transition-all duration-300 ${isNew ? 'rc-slide-in' : ''}`}
                 style={{
                   borderLeftColor: fColor,

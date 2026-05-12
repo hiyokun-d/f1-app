@@ -61,28 +61,6 @@ function statusColor(flag: string): string {
   }
 }
 
-function statusLabel(flag: string): string {
-  switch (flag) {
-    case "GREEN":
-      return "TRACK CLEAR";
-    case "YELLOW":
-      return "YELLOW FLAG";
-    case "DOUBLE YELLOW":
-      return "DBL YELLOW";
-    case "RED":
-      return "RED FLAG";
-    case "BLUE":
-      return "BLUE FLAG";
-    case "CHEQUERED":
-      return "CHEQUERED";
-    case "SAFETY CAR":
-      return "SAFETY CAR";
-    case "VIRTUAL SAFETY CAR":
-      return "VSC";
-    default:
-      return flag;
-  }
-}
 
 function WindArrow({ degrees }: { degrees: number }) {
   return (

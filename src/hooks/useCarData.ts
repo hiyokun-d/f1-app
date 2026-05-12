@@ -1,15 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { openF1 } from '../api/openf1'
+import { isHistorical } from '../utils/session'
 import type { CarData } from '../types'
 
 export interface CarDataState {
   latest: CarData | null
   history: CarData[]
-}
-
-function isHistorical(sessionDateEnd: string | null): boolean {
-  if (!sessionDateEnd) return false
-  return Date.now() - new Date(sessionDateEnd).getTime() > 3600_000
 }
 
 export function useCarData(

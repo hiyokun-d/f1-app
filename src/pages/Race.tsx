@@ -15,9 +15,6 @@ import TelemetryPanel from "../components/race/panels/TelemetryPanel";
 import RcTickerPanel from "../components/race/panels/RcTickerPanel";
 import OvertakeBanner from "../components/race/panels/OvertakeBanner";
 
-// Fixed layout heights (px) — REPLAY_H / TICKER_H are stable; header is measured dynamically
-const REPLAY_H = 53;
-const TICKER_H = 32;
 
 export default function Race() {
   const { sessionKey } = useParams<{ sessionKey: string }>();
@@ -29,18 +26,6 @@ export default function Race() {
   const [leftW, setLeftW] = useState(200);
   const [rightW, setRightW] = useState(290);
 
-  // ── Header height — measured dynamically so panels never overlap it ───────
-  const headerRef = useRef<HTMLDivElement>(null);
-  const [headerH, setHeaderH] = useState(64); // 64px initial estimate
-  useEffect(() => {
-    const el = headerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      setHeaderH(Math.ceil(entry.contentRect.height));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // ── Session ──────────────────────────────────────────────────────────────
   const [session, setSession] = useState<Session | null>(null);
@@ -250,9 +235,6 @@ export default function Race() {
       >((best, l) => (!best || l.lap_number > best.lap_number ? l : best), undefined);
   }, [replayLaps, effectiveDriver]);
 
-  // ── Panel geometry ───────────────────────────────────────────────────────
-  const panelBottom = REPLAY_H + TICKER_H;
-
   // ── Loading / error states ───────────────────────────────────────────────
   if (race.loading) {
     return (
@@ -362,10 +344,10 @@ export default function Race() {
 
   return (
     <div
-      className="h-screen overflow-hidden relative"
+      className="h-screen flex flex-col overflow-hidden relative"
       style={{ background: "#06070a" }}
     >
-      {/* ── Layer 0: Full-screen track map ────────────────────────────── */}
+      {/* ── Background: full-screen track map ─────────────────────────── */}
       <div className="absolute inset-0 z-0">
         <TrackMap
           outline={trackMap.outline}
@@ -378,8 +360,8 @@ export default function Race() {
         />
       </div>
 
-      {/* ── Layer 3: Header — no fixed height; measured by ResizeObserver ── */}
-      <div ref={headerRef} className="relative z-30">
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="relative z-30 shrink-0">
         <Header
           sessionName={sessionName}
           sessionType={sessionType}
@@ -395,70 +377,61 @@ export default function Race() {
         />
       </div>
 
-      {/* ── Layer 4: Overtake banner ──────────────────────────────────── */}
-      {activeBannerOvertake &&
-        bannerOvertakingDriver &&
-        bannerOvertakenDriver && (
-          <OvertakeBanner
-            overtake={activeBannerOvertake}
-            overtakingDriver={bannerOvertakingDriver}
-            overtakenDriver={bannerOvertakenDriver}
-            headerHeight={headerH}
-            onDismiss={() => setActiveBannerOvertake(null)}
-          />
-        )}
+      {/* ── Main row: panels flanking the track map ──────────────────── */}
+      <div className="relative z-20 flex flex-1 min-h-0">
+        {/* Left: Standings */}
+        <StandingsPanel
+          width={leftW}
+          onWidthChange={setLeftW}
+          sessionKey={key}
+          sessionDateEnd={sessionDateEnd}
+          positions={replayPositions}
+          drivers={race.drivers}
+          intervals={replayIntervals}
+          laps={replayLaps}
+          stints={replayStints}
+          pits={replayPits}
+          positionChanges={replayPositionChanges}
+          selectedDriver={effectiveDriver}
+          onSelectDriver={setSelectedDriver}
+          hasError={!!race.error}
+          recentOvertakes={race.overtakes}
+          currentlap={currentLap}
+          totalLaps={race.totalLaps}
+        />
 
-      {/* ── Layer 2: Left panel — Standings ──────────────────────────── */}
-      <StandingsPanel
-        top={headerH}
-        bottom={panelBottom}
-        width={leftW}
-        onWidthChange={setLeftW}
-        sessionKey={key}
-        sessionDateEnd={sessionDateEnd}
-        positions={replayPositions}
-        drivers={race.drivers}
-        intervals={replayIntervals}
-        laps={replayLaps}
-        stints={replayStints}
-        pits={replayPits}
-        positionChanges={replayPositionChanges}
-        selectedDriver={effectiveDriver}
-        onSelectDriver={setSelectedDriver}
-        hasError={!!race.error}
-        recentOvertakes={race.overtakes}
-        currentlap={currentLap}
-        totalLaps={race.totalLaps}
-      />
+        {/* Center spacer — track map shows through */}
+        <div className="flex-1 relative">
+          {activeBannerOvertake &&
+            bannerOvertakingDriver &&
+            bannerOvertakenDriver && (
+              <OvertakeBanner
+                overtake={activeBannerOvertake}
+                overtakingDriver={bannerOvertakingDriver}
+                overtakenDriver={bannerOvertakenDriver}
+                onDismiss={() => setActiveBannerOvertake(null)}
+              />
+            )}
+        </div>
 
-      {/* ── Layer 2: Right panel — Telemetry + Radio ─────────────────── */}
+        {/* Right: Telemetry + Radio */}
+        <TelemetryPanel
+          width={rightW}
+          onWidthChange={setRightW}
+          driver={selectedDriverObj}
+          latest={carLatest}
+          history={carHistory}
+          lastLap={selectedLastLap}
+          currentStint={selectedStint}
+          radio={replayTeamRadio}
+          drivers={race.drivers}
+          selectedDriver={effectiveDriver}
+        />
+      </div>
 
-      <TelemetryPanel
-        top={headerH}
-        bottom={panelBottom}
-        width={rightW}
-        onWidthChange={setRightW}
-        driver={selectedDriverObj}
-        latest={carLatest}
-        history={carHistory}
-        lastLap={selectedLastLap}
-        currentStint={selectedStint}
-        radio={replayTeamRadio}
-        drivers={race.drivers}
-        selectedDriver={effectiveDriver}
-      />
-
-      {/* ── Layer 2: Bottom ticker — Race control ─────────────────────── */}
-      <RcTickerPanel
-        messages={replayRaceControl}
-        left={leftW}
-        right={0}
-        bottom={REPLAY_H}
-        height={TICKER_H}
-      />
-
-      {/* ── Layer 3: Replay controls ──────────────────────────────────── */}
-      <div className="absolute z-30 bottom-0 left-0 right-0">
+      {/* ── Bottom bar: RC ticker + replay controls ───────────────────── */}
+      <div className="relative z-30 shrink-0">
+        <RcTickerPanel messages={replayRaceControl} />
         <ReplayControls {...replay} />
       </div>
     </div>

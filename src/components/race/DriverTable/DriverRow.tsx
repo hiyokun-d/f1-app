@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import type {
   Driver,
   Position,
@@ -18,7 +17,6 @@ import { StatusBadge } from "./StatusBadge";
 import { TyreBadge } from "./TyreBadge";
 import { PositionNumber } from "./PositionNumber";
 import AnimatedValue from "../../common/AnimatedValue";
-import { animate } from "animejs";
 import { GapDisplay } from "../../common/GapDisplay";
 
 interface DriverRowProps {
@@ -131,12 +129,6 @@ export function DriverRow({
           s3 === driverBestSectors?.s3
         ? "#22c55e"
         : "#4b5563";
-  const miniSegs = [
-    ...(lastLap?.segments_sector_1 ?? []),
-    ...(lastLap?.segments_sector_2 ?? []),
-    ...(lastLap?.segments_sector_3 ?? []),
-  ];
-
   const compound = stint?.compound ?? "UNKNOWN";
   const expectedLife = TYRE_LIFE_LAPS[compound] ?? 30;
   const tyreWear =
@@ -575,7 +567,6 @@ export function DriverRow({
                       color: sec.c,
                     }}
                   >
-                    {/* {sec.v.toFixed(3)} */}
                     <AnimatedValue value={sec.v.toFixed(3)} />
                   </span>
                 ) : null,
@@ -638,7 +629,6 @@ export function DriverRow({
             color: isJustOut ? "#22c55e" : "#6b7280",
           }}
         >
-          {/* `${pitDuration.toFixed(1)}s` */}
           {pitDuration != null ? (
             <>
               <AnimatedValue value={pitDuration.toFixed(1)} />s
@@ -664,36 +654,6 @@ export function DriverRow({
         )}
       </div>
 
-      {/* Mini-sector strip */}
-      {/* {miniSegs.length > 0 && ( */}
-      {/*   <div */}
-      {/*     className="absolute bottom-0 left-0 right-0 pointer-events-none flex" */}
-      {/*     style={{ height: 3, zIndex: 5 }} */}
-      {/*   > */}
-      {/*     {miniSegs.map((seg, i) => { */}
-      {/*       const bg = */}
-      {/*         seg === 2051 */}
-      {/*           ? "#c084fc" */}
-      {/*           : seg === 2049 */}
-      {/*             ? "#22c55e" */}
-      {/*             : seg === 2048 */}
-      {/*               ? "#eab308" */}
-      {/*               : seg === 2052 */}
-      {/*                 ? "#f97316" */}
-      {/*                 : "transparent"; */}
-      {/*       return ( */}
-      {/*         <div */}
-      {/*           key={i} */}
-      {/*           style={{ */}
-      {/*             flex: 1, */}
-      {/*             background: bg, */}
-      {/*             opacity: bg === "transparent" ? 0 : 0.7, */}
-      {/*           }} */}
-      {/*         /> */}
-      {/*       ); */}
-      {/*     })} */}
-      {/*   </div> */}
-      {/* )} */}
     </div>
   );
 }

@@ -188,6 +188,7 @@ export interface SessionResult {
   duration_sector_3: number | null
   gap_to_leader: number | null
   meeting_key: number
+  number_of_laps: number | null
   position: number
   session_key: number
 }

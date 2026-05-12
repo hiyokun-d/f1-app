@@ -215,7 +215,6 @@ export default function DriverTable({
             style={{ padding: "4px 8px 4px 12px" }}
           >
             <div />
-            {/* <div className="driver-name-cell driver-col-label">p</div> */}
             <div className="driver-col-label" style={{ textAlign: "center" }}>
               TYR
             </div>
@@ -262,8 +261,6 @@ export default function DriverTable({
             />
           ))}
         </div>
-        {/* end inline-block wrapper */}
-
         {positions.length === 0 && (
           <div className="flex items-center justify-center h-24">
             <span

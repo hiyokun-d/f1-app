@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import { animate } from "animejs";
 import type {
   Driver,
   Position,
@@ -12,8 +14,6 @@ import ResizeHandle from "../ResizeHandle";
 
 interface Props {
   // Layout
-  top: number;
-  bottom: number;
   width: number;
   onWidthChange: (w: number) => void;
   // Session
@@ -36,8 +36,6 @@ interface Props {
 }
 
 export default function StandingsPanel({
-  top,
-  bottom,
   width,
   onWidthChange,
   sessionKey,
@@ -56,17 +54,28 @@ export default function StandingsPanel({
   currentlap,
   totalLaps,
 }: Props) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!panelRef.current) return;
+    animate(panelRef.current, {
+      opacity: [0, 1],
+      x: [-20, 0],
+      duration: 360,
+      ease: "outExpo",
+    });
+  }, []);
+
   return (
     <div
-      className="absolute z-20 flex flex-col"
+      ref={panelRef}
+      className="relative h-full shrink-0 flex flex-col"
       style={{
-        top,
-        bottom,
-        left: 0,
         width,
         background: "rgba(5,6,9,0.92)",
         backdropFilter: "blur(6px)",
         borderRight: "1px solid rgba(255,255,255,0.07)",
+        opacity: 0,
       }}
     >
       {/* Panel header */}

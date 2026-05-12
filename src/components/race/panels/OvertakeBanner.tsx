@@ -7,12 +7,11 @@ interface Props {
   overtake: OvertakeEvent
   overtakingDriver: Driver
   overtakenDriver: Driver
-  headerHeight: number
   onDismiss: () => void
 }
 
 export default function OvertakeBanner({
-  overtake, overtakingDriver, overtakenDriver, headerHeight, onDismiss,
+  overtake, overtakingDriver, overtakenDriver, onDismiss,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const scope = useRef<ReturnType<typeof createScope> | null>(null)
@@ -36,8 +35,8 @@ export default function OvertakeBanner({
       // Driver cards stagger in
       animate('.ob-card', {
         opacity: [0, 1],
-        x: (el: Element) => {
-          return el.classList.contains('ob-attacker') ? [-24, 0] : [24, 0]
+        x: (el: unknown) => {
+          return (el as Element).classList.contains('ob-attacker') ? [-24, 0] : [24, 0]
         },
         delay: stagger(80, { start: 160 }),
         duration: 320,
@@ -82,7 +81,7 @@ export default function OvertakeBanner({
       ref={ref}
       className="absolute z-40"
       style={{
-        top: headerHeight + 12,
+        top: 12,
         left: '50%',
         transform: 'translateX(-50%)',
         opacity: 0,

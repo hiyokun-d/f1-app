@@ -25,6 +25,8 @@ interface Props {
   selectedDriver: number | null;
   onSelectDriver: (dn: number) => void;
   recentOvertakes?: OvertakeEvent[];
+  currentlap: number | null;
+  totalLaps: number | null;
 }
 
 export default function DriverTable({
@@ -40,6 +42,8 @@ export default function DriverTable({
   selectedDriver,
   onSelectDriver,
   recentOvertakes,
+  currentlap,
+  totalLaps,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayPositions, setDisplayPositions] =
@@ -213,11 +217,12 @@ export default function DriverTable({
             style={{ padding: "4px 8px 4px 12px" }}
           >
             <div />
+            {/* <div className="driver-name-cell driver-col-label">p</div> */}
             <div className="driver-col-label" style={{ textAlign: "center" }}>
               TYR
             </div>
             <div className="driver-name-cell driver-col-label">DRIVER</div>
-            <div className="driver-col-label" style={{ textAlign: "right" }}>
+            <div className="driver-col-label" style={{ textAlign: "center" }}>
               GAP
             </div>
             <div className="driver-detail driver-col-label justify-end">
@@ -253,6 +258,8 @@ export default function DriverTable({
               drsDriver={drsDriver}
               drsActive={drsActive}
               onSelectDriver={onSelectDriver}
+              currentlap={currentlap}
+              totalLaps={totalLaps}
             />
           ))}
         </div>

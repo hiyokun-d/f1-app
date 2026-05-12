@@ -26,7 +26,7 @@ export default function Race() {
   if (!key || isNaN(key)) return <Navigate to="/" replace />;
 
   // ── Panel widths (resizable) ─────────────────────────────────────────────
-  const [leftW, setLeftW] = useState(370);
+  const [leftW, setLeftW] = useState(200);
   const [rightW, setRightW] = useState(290);
 
   // ── Header height — measured dynamically so panels never overlap it ───────
@@ -427,25 +427,27 @@ export default function Race() {
         onSelectDriver={setSelectedDriver}
         hasError={!!race.error}
         recentOvertakes={race.overtakes}
+        currentlap={currentLap}
+        totalLaps={race.totalLaps}
       />
 
       {/* ── Layer 2: Right panel — Telemetry + Radio ─────────────────── */}
 
-      {/* <TelemetryPanel */}
-      {/*   top={headerH} */}
-      {/*   bottom={panelBottom} */}
-      {/*   width={rightW} */}
-      {/*   onWidthChange={setRightW} */}
-      {/*   driver={selectedDriverObj} */}
-      {/*   latest={carLatest} */}
-      {/*   history={carHistory} */}
-      {/*   lastLap={selectedLastLap} */}
-      {/*   currentStint={selectedStint} */}
-      {/*   radio={replayTeamRadio} */}
-      {/*   drivers={race.drivers} */}
-      {/*   selectedDriver={effectiveDriver} */}
-      {/* /> */}
-      {/**/}
+      <TelemetryPanel
+        top={headerH}
+        bottom={panelBottom}
+        width={rightW}
+        onWidthChange={setRightW}
+        driver={selectedDriverObj}
+        latest={carLatest}
+        history={carHistory}
+        lastLap={selectedLastLap}
+        currentStint={selectedStint}
+        radio={replayTeamRadio}
+        drivers={race.drivers}
+        selectedDriver={effectiveDriver}
+      />
+
       {/* ── Layer 2: Bottom ticker — Race control ─────────────────────── */}
       <RcTickerPanel
         messages={replayRaceControl}

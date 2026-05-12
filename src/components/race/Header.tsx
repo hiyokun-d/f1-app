@@ -124,7 +124,7 @@ function Stat({
           color: blue ? "#60a5fa" : hot ? "#f97316" : "#f0f0f0",
         }}
       >
-        {value}
+value}
       </span>
     </div>
   );
@@ -484,7 +484,7 @@ export default function Header({
             borderColor: fColor,
             padding: "4px 20px 6px",
             gap: 2,
-            transition: "border-color 0.4s ease",
+            transition: "border-color 0.4s ease, width 0.",
           }}
         >
           <span
@@ -539,25 +539,28 @@ export default function Header({
                   <span
                     style={{
                       fontFamily: "var(--font-display)",
-                      fontSize: 6,
+                      fontSize: 5,
                       fontWeight: 700,
                       letterSpacing: "0.15em",
                       color: glowing ? "#c084fc" : "#3a4258",
                       transition: "color 0.35s ease",
                     }}
                   >
-                    S{i + 1}
-                  </span>
+                    S{i+1}                  </span>
                   <span
                     style={{
                       fontFamily: "var(--font-data)",
-                      fontSize: 8,
+                      fontSize: 7,
                       letterSpacing: "-0.02em",
                       color: glowing ? "#c084fc" : "#4b5563",
                       transition: "color 0.35s ease",
                     }}
                   >
-                    {val !== null ? val.toFixed(3) : "—"}
+                    {val !== null ? (
+                      <AnimatedValue value={parseFloat(val.toFixed(3))} />
+                    ) : (
+                      "—"
+                    )}
                   </span>
                 </div>
               );

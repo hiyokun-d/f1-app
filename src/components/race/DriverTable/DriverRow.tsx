@@ -19,140 +19,7 @@ import { TyreBadge } from "./TyreBadge";
 import { PositionNumber } from "./PositionNumber";
 import AnimatedValue from "../../common/AnimatedValue";
 import { animate } from "animejs";
-
-// ── GapDisplay: animated slot-machine number + proximity glow ─────────────
-// gap = gap_to_leader (null during live races); intervalGap = gap to car ahead (fallback)
-function GapDisplay({
-  gap,
-  intervalGap,
-  isLeader,
-}: {
-  gap: number | null;
-  intervalGap: number | null;
-  isLeader: boolean;
-}) {
-  const wrapRef = useRef<HTMLSpanElement>(null);
-  const prevGapRef = useRef<number | null>(null);
-  const hasInitRef = useRef(false);
-
-  // Prefer gap_to_leader; fall back to interval (car ahead) for live races
-  const displayGap = gap ?? intervalGap;
-  const isIntervalFallback = gap === null && intervalGap !== null;
-
-  const color = isLeader
-    ? "#ffd600"
-    : displayGap === null
-      ? "#4b5563"
-      : displayGap <= 0.5
-        ? "#4ade80"
-        : displayGap <= 1.0
-          ? "#22c55e"
-          : displayGap <= 2.0
-            ? "#eab308"
-            : "#4b5563";
-
-  useEffect(() => {
-    if (!hasInitRef.current) {
-      hasInitRef.current = true;
-      prevGapRef.current = displayGap;
-      return;
-    }
-    if (displayGap === null || isLeader || displayGap === prevGapRef.current)
-      return;
-    prevGapRef.current = displayGap;
-    if (!wrapRef.current || displayGap > 2) return;
-
-    const glowColor =
-      displayGap <= 0.5
-        ? "rgba(74,222,128,"
-        : displayGap <= 1.0
-          ? "rgba(34,197,94,"
-          : "rgba(234,179,8,";
-
-    animate(wrapRef.current, {
-      filter: [
-        `drop-shadow(0 0 0px ${glowColor}0))`,
-        `drop-shadow(0 0 14px ${glowColor}0.95))`,
-        `drop-shadow(0 0 5px ${glowColor}0.4))`,
-        `drop-shadow(0 0 0px ${glowColor}0))`,
-      ],
-      duration: 950,
-      ease: "outCubic",
-    });
-  }, [displayGap, isLeader]);
-
-  if (isLeader) {
-    return (
-      <AnimatedValue
-        value="LEAD"
-        style={{
-          fontFamily: "var(--font-data)",
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "-0.03em",
-          color: "#ffd600",
-        }}
-      />
-    );
-  }
-
-  if (displayGap === null) {
-    return (
-      <span
-        style={{
-          fontFamily: "var(--font-data)",
-          fontSize: 11,
-          letterSpacing: "-0.03em",
-          color: "#4b5563",
-        }}
-      >
-        —
-      </span>
-    );
-  }
-
-  const cleanGap = parseFloat(displayGap.toFixed(3));
-  const isClose = displayGap <= 2;
-
-  return (
-    <span
-      ref={wrapRef}
-      style={{ display: "inline-flex", alignItems: "baseline" }}
-    >
-      <span
-        style={{
-          fontFamily: "var(--font-data)",
-          fontSize: 10,
-          color,
-          opacity: isIntervalFallback ? 0.4 : 0.6,
-        }}
-      >
-        +
-      </span>
-      <AnimatedValue
-        value={cleanGap}
-        style={{
-          fontFamily: "var(--font-data)",
-          fontSize: 11,
-          fontWeight: isClose ? 600 : 400,
-          letterSpacing: "-0.03em",
-          color,
-        }}
-      />
-      <span
-        style={{
-          fontFamily: "var(--font-data)",
-          fontSize: 9,
-          color,
-          opacity: 0.55,
-          marginLeft: 1,
-        }}
-      >
-        s
-      </span>
-    </span>
-  );
-}
+import { GapDisplay } from "../../common/GapDisplay";
 
 interface DriverRowProps {
   pos: Position;
@@ -181,6 +48,8 @@ interface DriverRowProps {
   drsDriver: number | null;
   drsActive: boolean;
   onSelectDriver: (dn: number) => void;
+  totalLaps: number;
+  currentlap: number;
 }
 
 export function DriverRow({
@@ -203,6 +72,8 @@ export function DriverRow({
   drsDriver,
   drsActive,
   onSelectDriver,
+  currentlap,
+  totalLaps,
 }: DriverRowProps) {
   const driver = driverMap.get(pos.driver_number);
   const interval = intervalMap.get(pos.driver_number);
@@ -527,9 +398,14 @@ export function DriverRow({
             >
               {driver?.name_acronym ?? "???"}
             </span>
-            {activeBadges.map((v) => (
-              <StatusBadge key={v} variant={v} />
-            ))}
+            {activeBadges.map((v) => {
+              if (v === "fl") {
+                return <StatusBadge key={v} variant={v} />;
+              }
+
+              if (currentlap <= totalLaps - 2)
+                return <StatusBadge key={v} variant={v} />;
+            })}
           </div>
           <div className="flex items-center gap-1 min-w-0">
             <span
@@ -555,7 +431,7 @@ export function DriverRow({
       </div>
 
       {/* Gap to leader — animated; crossfades with pit duration on pit exit */}
-      <div className="text-right" style={{ position: "relative" }}>
+      <div className="text-center" style={{ position: "relative" }}>
         <span data-gap-text={pos.driver_number} style={{ display: "block" }}>
           <GapDisplay
             gap={interval?.gap_to_leader ?? null}

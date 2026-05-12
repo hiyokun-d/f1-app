@@ -31,6 +31,8 @@ interface Props {
   onSelectDriver: (dn: number) => void;
   hasError?: boolean;
   recentOvertakes?: OvertakeEvent[];
+  currentlap: number | null;
+  totalLaps: number | null;
 }
 
 export default function StandingsPanel({
@@ -51,6 +53,8 @@ export default function StandingsPanel({
   onSelectDriver,
   hasError,
   recentOvertakes,
+  currentlap,
+  totalLaps,
 }: Props) {
   return (
     <div
@@ -118,6 +122,8 @@ export default function StandingsPanel({
           selectedDriver={selectedDriver}
           onSelectDriver={onSelectDriver}
           recentOvertakes={recentOvertakes}
+          currentlap={currentlap}
+          totalLaps={totalLaps}
         />
       </div>
 

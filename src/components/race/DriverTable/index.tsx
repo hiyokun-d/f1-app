@@ -1,6 +1,14 @@
 import { useMemo, useRef, useState } from "react";
 import { useCarData } from "../../../hooks/useCarData";
-import type { Driver, Position, Interval, Lap, Stint, Pit, OvertakeEvent } from "../../../types";
+import type {
+  Driver,
+  Position,
+  Interval,
+  Lap,
+  Stint,
+  Pit,
+  OvertakeEvent,
+} from "../../../types";
 import { useDriverTableAnimations } from "./useDriverTableAnimations";
 import { DriverRow } from "./DriverRow";
 
@@ -34,9 +42,14 @@ export default function DriverTable({
   recentOvertakes,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [displayPositions, setDisplayPositions] = useState<Position[]>(positions);
+  const [displayPositions, setDisplayPositions] =
+    useState<Position[]>(positions);
 
-  const { latest: carLatest } = useCarData(sessionKey, selectedDriver, sessionDateEnd);
+  const { latest: carLatest } = useCarData(
+    sessionKey,
+    selectedDriver,
+    sessionDateEnd,
+  );
   const drsActive = (carLatest?.drs ?? 0) >= 10;
   const drsDriver = selectedDriver;
 
@@ -54,7 +67,8 @@ export default function DriverTable({
     const m = new Map<number, Stint>();
     stints.forEach((s) => {
       const existing = m.get(s.driver_number);
-      if (!existing || s.stint_number > existing.stint_number) m.set(s.driver_number, s);
+      if (!existing || s.stint_number > existing.stint_number)
+        m.set(s.driver_number, s);
     });
     return m;
   }, [stints]);
@@ -63,7 +77,8 @@ export default function DriverTable({
     const m = new Map<number, Lap>();
     laps.forEach((l) => {
       const existing = m.get(l.driver_number);
-      if (!existing || l.lap_number > existing.lap_number) m.set(l.driver_number, l);
+      if (!existing || l.lap_number > existing.lap_number)
+        m.set(l.driver_number, l);
     });
     return m;
   }, [laps]);
@@ -73,20 +88,36 @@ export default function DriverTable({
     laps.forEach((l) => {
       if (l.lap_duration === null) return;
       const current = m.get(l.driver_number);
-      if (current === undefined || l.lap_duration < current) m.set(l.driver_number, l.lap_duration);
+      if (current === undefined || l.lap_duration < current)
+        m.set(l.driver_number, l.lap_duration);
     });
     return m;
   }, [laps]);
 
   // Best S1/S2/S3 per driver across all laps
   const bestSectorMap = useMemo(() => {
-    const m = new Map<number, { s1: number | null; s2: number | null; s3: number | null }>();
+    const m = new Map<
+      number,
+      { s1: number | null; s2: number | null; s3: number | null }
+    >();
     laps.forEach((l) => {
       const cur = m.get(l.driver_number) ?? { s1: null, s2: null, s3: null };
       m.set(l.driver_number, {
-        s1: l.duration_sector_1 !== null && (cur.s1 === null || l.duration_sector_1 < cur.s1) ? l.duration_sector_1 : cur.s1,
-        s2: l.duration_sector_2 !== null && (cur.s2 === null || l.duration_sector_2 < cur.s2) ? l.duration_sector_2 : cur.s2,
-        s3: l.duration_sector_3 !== null && (cur.s3 === null || l.duration_sector_3 < cur.s3) ? l.duration_sector_3 : cur.s3,
+        s1:
+          l.duration_sector_1 !== null &&
+          (cur.s1 === null || l.duration_sector_1 < cur.s1)
+            ? l.duration_sector_1
+            : cur.s1,
+        s2:
+          l.duration_sector_2 !== null &&
+          (cur.s2 === null || l.duration_sector_2 < cur.s2)
+            ? l.duration_sector_2
+            : cur.s2,
+        s3:
+          l.duration_sector_3 !== null &&
+          (cur.s3 === null || l.duration_sector_3 < cur.s3)
+            ? l.duration_sector_3
+            : cur.s3,
       });
     });
     return m;
@@ -94,7 +125,9 @@ export default function DriverTable({
 
   // Overall fastest sector times across all drivers
   const overallBestSectors = useMemo(() => {
-    let s1: number | null = null, s2: number | null = null, s3: number | null = null;
+    let s1: number | null = null,
+      s2: number | null = null,
+      s3: number | null = null;
     bestSectorMap.forEach((v) => {
       if (v.s1 !== null && (s1 === null || v.s1 < s1)) s1 = v.s1;
       if (v.s2 !== null && (s2 === null || v.s2 < s2)) s2 = v.s2;
@@ -135,7 +168,8 @@ export default function DriverTable({
   const pitStatusMap = useMemo(() => {
     const m = new Map<number, "pitting" | "just_out">();
     lapMap.forEach((lap, dn) => {
-      if (lap.is_pit_out_lap && lap.lap_number >= maxLap - 1) m.set(dn, "just_out");
+      if (lap.is_pit_out_lap && lap.lap_number >= maxLap - 1)
+        m.set(dn, "just_out");
     });
     pits.forEach((p) => {
       if (p.lap_number < maxLap - 1) return;
@@ -167,45 +201,62 @@ export default function DriverTable({
 
   return (
     <div className="h-full flex flex-col" style={{ background: "transparent" }}>
-      <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-auto min-h-0">
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto overflow-x-auto min-h-0"
+      >
         {/* inline-block forces this wrapper to shrink to its content width (column sum),
             preventing rows from stretching to the panel width and causing false empty space */}
         <div style={{ display: "inline-block", verticalAlign: "top" }}>
-        <div className="driver-row driver-header-row" style={{ padding: "4px 8px 4px 12px" }}>
-          <div />
-          <div className="driver-col-label" style={{ textAlign: "center" }}>TYR</div>
-          <div className="driver-name-cell driver-col-label">DRIVER</div>
-          <div className="driver-col-label" style={{ textAlign: "right" }}>GAP</div>
-          <div className="driver-detail driver-col-label justify-end">INT</div>
-          <div className="driver-detail driver-col-label justify-end">TIME</div>
-          <div className="driver-detail driver-col-label justify-end">PIT</div>
-        </div>
+          <div
+            className="driver-row driver-header-row"
+            style={{ padding: "4px 8px 4px 12px" }}
+          >
+            <div />
+            <div className="driver-col-label" style={{ textAlign: "center" }}>
+              TYR
+            </div>
+            <div className="driver-name-cell driver-col-label">DRIVER</div>
+            <div className="driver-col-label" style={{ textAlign: "right" }}>
+              GAP
+            </div>
+            <div className="driver-detail driver-col-label justify-end">
+              INT
+            </div>
+            <div className="driver-detail driver-col-label justify-end">
+              TIME
+            </div>
+            <div className="driver-detail driver-col-label justify-end">
+              PIT
+            </div>
+          </div>
 
-        {displayPositions.map((pos, idx) => (
-          <DriverRow
-            key={pos.driver_number}
-            pos={pos}
-            idx={idx}
-            driverMap={driverMap}
-            intervalMap={intervalMap}
-            stintMap={stintMap}
-            lapMap={lapMap}
-            bestLapMap={bestLapMap}
-            lastPitMap={lastPitMap}
-            pitStatusMap={pitStatusMap}
-            pitCountMap={pitCountMap}
-            positionChanges={positionChanges}
-            overallBest={overallBest}
-            overallBestSectors={overallBestSectors}
-            bestSectorMap={bestSectorMap}
-            maxLap={maxLap}
-            selectedDriver={selectedDriver}
-            drsDriver={drsDriver}
-            drsActive={drsActive}
-            onSelectDriver={onSelectDriver}
-          />
-        ))}
-        </div>{/* end inline-block wrapper */}
+          {displayPositions.map((pos, idx) => (
+            <DriverRow
+              key={pos.driver_number}
+              pos={pos}
+              idx={idx}
+              driverMap={driverMap}
+              intervalMap={intervalMap}
+              stintMap={stintMap}
+              lapMap={lapMap}
+              bestLapMap={bestLapMap}
+              lastPitMap={lastPitMap}
+              pitStatusMap={pitStatusMap}
+              pitCountMap={pitCountMap}
+              positionChanges={positionChanges}
+              overallBest={overallBest}
+              overallBestSectors={overallBestSectors}
+              bestSectorMap={bestSectorMap}
+              maxLap={maxLap}
+              selectedDriver={selectedDriver}
+              drsDriver={drsDriver}
+              drsActive={drsActive}
+              onSelectDriver={onSelectDriver}
+            />
+          ))}
+        </div>
+        {/* end inline-block wrapper */}
 
         {positions.length === 0 && (
           <div className="flex items-center justify-center h-24">

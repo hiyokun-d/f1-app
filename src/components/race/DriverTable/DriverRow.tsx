@@ -575,7 +575,8 @@ export function DriverRow({
               justifyContent: "flex-end",
             }}
           >
-            {pitDuration.toFixed(1)}s
+            {/* {pitDuration.toFixed(1)}s */}
+            <AnimatedValue value={pitDuration.toFixed(1)} />s
           </span>
         )}
       </div>
@@ -691,7 +692,8 @@ export function DriverRow({
                       color: sec.c,
                     }}
                   >
-                    {sec.v.toFixed(3)}
+                    {/* {sec.v.toFixed(3)} */}
+                    <AnimatedValue value={sec.v.toFixed(3)} />
                   </span>
                 ) : null,
               )}
@@ -753,7 +755,14 @@ export function DriverRow({
             color: isJustOut ? "#22c55e" : "#6b7280",
           }}
         >
-          {pitDuration != null ? `${pitDuration.toFixed(1)}s` : "—"}
+          {/* `${pitDuration.toFixed(1)}s` */}
+          {pitDuration != null ? (
+            <>
+              <AnimatedValue value={pitDuration.toFixed(1)} />s
+            </>
+          ) : (
+            "—"
+          )}
         </span>
         {pitLap != null && (
           <span

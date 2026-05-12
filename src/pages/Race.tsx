@@ -446,7 +446,6 @@ export default function Race() {
       {/*   selectedDriver={effectiveDriver} */}
       {/* /> */}
       {/**/}
-
       {/* ── Layer 2: Bottom ticker — Race control ─────────────────────── */}
       <RcTickerPanel
         messages={replayRaceControl}

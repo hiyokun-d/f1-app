@@ -45,6 +45,14 @@ export default function Race() {
       setActiveBannerOvertake(race.overtakes[race.overtakes.length - 1]);
   }, [race.overtakes.length]);
 
+  // ── Driver list + track map ───────────────────────────────────────────────
+  const driverNumbers = useMemo(
+    () => race.drivers.map((d) => d.driver_number),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [race.drivers.map((d) => d.driver_number).join(",")],
+  );
+  const trackMap = useTrackMap(key, driverNumbers, sessionDateStart, sessionDateEnd);
+
   // ── Selected driver + car data ───────────────────────────────────────────
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
   const effectiveDriver =
@@ -64,14 +72,6 @@ export default function Race() {
     const end = new Date(sessionDateEnd).getTime()
     return Math.min(1, Math.max(0, (carBufferEnd.getTime() - start) / (end - start)))
   }, [carBufferEnd, sessionDateStart, sessionDateEnd])
-
-  // ── Track map ─────────────────────────────────────────────────────────────
-  const driverNumbers = useMemo(
-    () => race.drivers.map((d) => d.driver_number),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [race.drivers.map((d) => d.driver_number).join(",")],
-  );
-  const trackMap = useTrackMap(key, driverNumbers, sessionDateStart, sessionDateEnd);
 
   // ── Derived values ───────────────────────────────────────────────────────
   const currentLap = filtered.laps.reduce((m, l) => Math.max(m, l.lap_number), 0);

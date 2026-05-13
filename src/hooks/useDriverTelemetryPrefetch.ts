@@ -26,7 +26,7 @@ export function useDriverTelemetryPrefetch(
 
   // ── Upfront prefetch: fires once when driverNumbers first loads ────────────
   useEffect(() => {
-    if (!driverNumbers.length || initialFiredRef.current) return
+    if (!sessionKey || !driverNumbers.length || initialFiredRef.current) return
     initialFiredRef.current = true
 
     const historical = isHistorical(sessionDateEnd)
@@ -56,7 +56,7 @@ export function useDriverTelemetryPrefetch(
 
   // ── Buffer-sync prefetch: historical only — fires per chunk ───────────────
   useEffect(() => {
-    if (!isHistorical(sessionDateEnd) || !driverNumbers.length) return
+    if (!sessionKey || !isHistorical(sessionDateEnd) || !driverNumbers.length) return
 
     if (bufferEnd === null) {
       prevBufferEndRef.current = null

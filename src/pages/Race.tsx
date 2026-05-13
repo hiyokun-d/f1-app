@@ -89,6 +89,7 @@ export default function Race() {
   const bannerOvertakingDriver = activeBannerOvertake
     ? race.drivers.find((d) => d.driver_number === activeBannerOvertake.overtakingDriver)
     : null;
+
   const bannerOvertakenDriver = activeBannerOvertake
     ? race.drivers.find((d) => d.driver_number === activeBannerOvertake.overtakenDriver)
     : null;

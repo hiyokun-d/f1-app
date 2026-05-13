@@ -6,6 +6,7 @@ import { useTrackMap } from "../hooks/useTrackMap";
 import { useRaceReplay } from "../hooks/useRaceReplay";
 import { useSession } from "../hooks/useSession";
 import { useReplayFilter } from "../hooks/useReplayFilter";
+import { useDriverTelemetryPrefetch } from "../hooks/useDriverTelemetryPrefetch";
 import type { OvertakeEvent } from "../types";
 
 import Header from "../components/race/Header";
@@ -54,6 +55,8 @@ export default function Race() {
     sessionDateEnd,
     replay.replayTime,
   );
+
+  useDriverTelemetryPrefetch(key, driverNumbers, effectiveDriver, sessionDateEnd, carBufferEnd);
 
   const bufferProgress = useMemo(() => {
     if (!carBufferEnd || !sessionDateStart || !sessionDateEnd) return 0

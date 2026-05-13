@@ -2,14 +2,14 @@ import { useRef, useState } from 'react'
 import type { PlaybackSpeed, ReplayState, ReplayControls } from '../../hooks/useRaceReplay'
 import { SPEEDS } from '../../hooks/useRaceReplay'
 
-type Props = ReplayState & ReplayControls
+type Props = ReplayState & ReplayControls & { bufferProgress?: number }
 
 function pad(n: number) { return String(Math.floor(n)).padStart(2, '0') }
 function formatElapsed(s: number) { return `${pad(s / 60)}:${pad(s % 60)}` }
 
 export default function ReplayControls({
   isPlaying, speed, progress, elapsedSeconds, totalSeconds,
-  toggle, seek, setSpeed,
+  toggle, seek, setSpeed, bufferProgress = 0,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
   const [ripple, setRipple] = useState(false)
@@ -36,8 +36,18 @@ export default function ReplayControls({
         borderTop: '1px solid rgba(255,255,255,0.07)',
       }}
     >
-      {/* Waveform / progress accent line */}
+      {/* Accent line — buffer (white) behind playhead (red) */}
       <div className="h-px w-full relative overflow-hidden">
+        {bufferProgress > 0 && (
+          <div
+            className="h-full absolute left-0 top-0"
+            style={{
+              width: `${bufferProgress * 100}%`,
+              background: 'rgba(255,255,255,0.15)',
+              transition: 'width 0.6s ease-out',
+            }}
+          />
+        )}
         <div
           className="h-full absolute left-0 top-0"
           style={{
@@ -47,7 +57,7 @@ export default function ReplayControls({
             boxShadow: isPlaying ? '0 0 8px rgba(232,0,45,0.8)' : 'none',
           }}
         />
-        <div className="absolute inset-0 bg-[#1f2330]" style={{ left: `${pct}%` }} />
+        <div className="absolute inset-0 bg-[#1f2330]" style={{ left: `${bufferProgress > 0 ? bufferProgress * 100 : pct}%` }} />
       </div>
 
       {/* Controls row */}
@@ -101,6 +111,19 @@ export default function ReplayControls({
         >
           {/* Track */}
           <div className="absolute inset-x-0 h-1 rounded-full bg-[#1f2330]" style={{ top: '50%', marginTop: -2 }} />
+          {/* Buffer (data preloaded ahead of playhead) */}
+          {bufferProgress > 0 && (
+            <div
+              className="absolute left-0 h-1 rounded-full"
+              style={{
+                top: '50%',
+                marginTop: -2,
+                width: `${bufferProgress * 100}%`,
+                background: 'rgba(255,255,255,0.18)',
+                transition: 'width 0.6s ease-out',
+              }}
+            />
+          )}
           {/* Played */}
           <div
             className="absolute left-0 h-1 rounded-full"

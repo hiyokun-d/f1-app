@@ -70,9 +70,15 @@ const get = <T>(path: string, params?: Record<string, unknown>): Promise<T[]> =>
   const cached = CACHE.get(key)
   if (cached && cached.expiry > Date.now()) return Promise.resolve(cached.data as T[])
   return enqueue(async () => {
-    const { data } = await api.get<T[]>(path, { params })
-    CACHE.set(key, { data, expiry: Date.now() + CACHE_TTL })
-    return data
+    try {
+      const { data } = await api.get<T[]>(path, { params })
+      CACHE.set(key, { data, expiry: Date.now() + CACHE_TTL })
+      return data
+    } catch (err) {
+      // OpenF1 returns 404 when a query matches no records — treat as empty
+      if (axios.isAxiosError(err) && err.response?.status === 404) return []
+      throw err
+    }
   })
 }
 
@@ -118,11 +124,11 @@ export const openF1 = {
   weather: (params?: { session_key?: number; meeting_key?: number }) =>
     get<Weather>('/weather', params),
 
-  overtakes: (params?: { session_key?: number }) =>
-    get<import('../types').Overtake>('/overtakes', params),
-
   sessionResult: (params?: { session_key?: number; driver_number?: number }) =>
     get<import('../types').SessionResult>('/session_result', params),
+
+  overtakes: (params?: { session_key?: number }) =>
+    get<import('../types').Overtake>('/overtakes', params),
 
   startingGrid: (params?: { session_key?: number }) =>
     get<import('../types').StartingGrid>('/starting_grid', params),

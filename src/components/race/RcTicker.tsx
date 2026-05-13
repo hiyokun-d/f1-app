@@ -1,15 +1,11 @@
-import type { RaceControl } from '../../../types'
-import { flagColor } from '../../../utils/format'
+import type { RaceControl } from '../../types'
+import { flagColor } from '../../utils/format'
 
 interface Props {
   messages: RaceControl[]
-  left: number
-  right: number
-  bottom: number
-  height: number
 }
 
-export default function RcTickerPanel({ messages, left, right, bottom, height }: Props) {
+export default function RcTickerPanel({ messages }: Props) {
   const latest = messages[messages.length - 1]
   if (!latest) return null
 
@@ -18,9 +14,9 @@ export default function RcTickerPanel({ messages, left, right, bottom, height }:
   return (
     <div
       key={latest.date}
-      className="absolute z-20 flex items-center overflow-hidden animate-ticker-in"
+      className="flex items-center overflow-hidden animate-ticker-in"
       style={{
-        bottom, left, right, height,
+        height: 32,
         background: 'rgba(5,6,9,0.95)',
         borderTop: '1px solid rgba(255,255,255,0.05)',
       }}

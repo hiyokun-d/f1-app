@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { openF1 } from '../api/openf1'
+import { isHistorical } from '../utils/session'
 
 export interface TrackPoint { x: number; y: number }
 export interface LivePosition { driverNumber: number; x: number; y: number }
@@ -34,11 +35,6 @@ function normalizePoints(pts: TrackPoint[], bounds: Bounds, pad = 30): TrackPoin
     x: (p.x - bounds.minX) * scale + offsetX,
     y: SVG_H - ((p.y - bounds.minY) * scale + offsetY), // flip Y
   }))
-}
-
-function isHistorical(sessionDateEnd: string | null): boolean {
-  if (!sessionDateEnd) return false
-  return Date.now() - new Date(sessionDateEnd).getTime() > 3600_000
 }
 
 export function useTrackMap(

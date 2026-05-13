@@ -1,0 +1,33 @@
+/* ── Speed lines background texture ──────────────────────────────────────── */
+.speed-lines {
+  background-image: repeating-linear-gradient(
+    -65deg,
+    transparent,
+    transparent 24px,
+    rgba(255, 255, 255, 0.012) 24px,
+    rgba(255, 255, 255, 0.012) 25px
+  );
+}
+
+/* ── Title letter reveal ──────────────────────────────────────────────────── */
+@keyframes letter-drop {
+  0%   { opacity: 0; transform: translateY(-30px) scaleY(1.4); filter: blur(4px); }
+  60%  { opacity: 1; transform: translateY(2px) scaleY(0.97);  filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+
+/* ── Starting lights ─────────────────────────────────────────────────────── */
+@keyframes light-on {
+  0%   { background: #1a0008; box-shadow: 0 0 8px rgba(232,0,45,0.1); }
+  30%  { background: #e8002d; box-shadow: 0 0 32px rgba(232,0,45,0.9), 0 0 64px rgba(232,0,45,0.5); }
+  100% { background: #e8002d; box-shadow: 0 0 20px rgba(232,0,45,0.7), 0 0 40px rgba(232,0,45,0.4); }
+}
+@keyframes light-off {
+  0%   { background: #e8002d; box-shadow: 0 0 20px rgba(232,0,45,0.7); }
+  100% { background: #0d0008; box-shadow: 0 0 4px rgba(232,0,45,0.05); }
+}
+@keyframes lights-go {
+  0%   { transform: scaleX(1); }
+  20%  { transform: scaleX(1.04); }
+  100% { transform: scaleX(1); }
+}

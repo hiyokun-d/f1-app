@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { openF1 } from '../api/openf1'
+import { isHistorical, latestPerDriver, LIVE_POLL_MS } from '../utils/session'
 import type {
   Driver, Position, Interval, Lap, Stint,
-  Pit, RaceControl, TeamRadio, Weather, OvertakeEvent,
+  Pit, RaceControl, TeamRadio, Weather, OvertakeEvent, SessionResult,
 } from '../types'
 
 export interface RaceState {
@@ -18,14 +19,9 @@ export interface RaceState {
   weather: Weather | null
   overtakes: OvertakeEvent[]
   positionChanges: Record<number, 'up' | 'down'>
+  totalLaps: number
   loading: boolean
   error: string | null
-}
-
-// Historical = session ended more than 1 hour ago
-function isHistorical(sessionDateEnd: string | null): boolean {
-  if (!sessionDateEnd) return false
-  return Date.now() - new Date(sessionDateEnd).getTime() > 3600_000
 }
 
 function detectOvertakes(prev: Position[], next: Position[], laps: Lap[]): OvertakeEvent[] {
@@ -55,15 +51,16 @@ function detectOvertakes(prev: Position[], next: Position[], laps: Lap[]): Overt
   return events
 }
 
-const LIVE_POLL = 15000
-const HISTORICAL_POLL = 0  // no polling for historical sessions
+async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try { return await promise } catch { return fallback }
+}
 
 export function useRaceData(sessionKey: number, sessionDateEnd: string | null = null) {
   const [state, setState] = useState<RaceState>({
     drivers: [], positions: [], allPositions: [], intervals: [], laps: [],
     stints: [], pits: [], raceControl: [], teamRadio: [],
     weather: null, overtakes: [], positionChanges: {},
-    loading: true, error: null,
+    totalLaps: 0, loading: true, error: null,
   })
 
   const prevPositionsRef = useRef<Position[]>([])
@@ -74,44 +71,36 @@ export function useRaceData(sessionKey: number, sessionDateEnd: string | null = 
     try {
       const params = { session_key: sessionKey }
 
-      // Batch 1: critical display data
+      // Batch 1: critical
       const [drivers, positions, intervals] = await Promise.all([
         openF1.drivers(params),
         openF1.positions(params),
         openF1.intervals(params),
       ])
 
-      // Batch 2: lap/stint/pit data
+      // Batch 2: laps critical, stints/pits non-critical
       const [laps, stints, pits] = await Promise.all([
         openF1.laps(params),
-        openF1.stints(params),
-        openF1.pits(params),
+        safe(openF1.stints(params), []),
+        safe(openF1.pits(params), []),
       ])
 
-      // Batch 3: comms + weather
-      const [raceControl, teamRadio, weatherArr] = await Promise.all([
-        openF1.raceControl(params),
-        openF1.teamRadio(params),
-        openF1.weather(params),
+      // Batch 3: all non-critical
+      const [raceControl, teamRadio, weatherArr, sessionResult] = await Promise.all([
+        safe(openF1.raceControl(params), []),
+        safe(openF1.teamRadio(params), []),
+        safe(openF1.weather(params), []),
+        safe(openF1.sessionResult(params), [] as SessionResult[]),
       ])
 
-      // Latest position per driver, sorted
-      const latestPositions = Object.values(
-        positions.reduce<Record<number, Position>>((acc, p) => {
-          if (!acc[p.driver_number] || p.date > acc[p.driver_number].date)
-            acc[p.driver_number] = p
-          return acc
-        }, {})
-      ).sort((a, b) => a.position - b.position)
+      const totalLaps = sessionResult.length
+        ? Math.max(...sessionResult.map(r => r.number_of_laps ?? 0))
+        : 0
 
-      // Latest interval per driver
-      const latestIntervals = Object.values(
-        intervals.reduce<Record<number, Interval>>((acc, i) => {
-          if (!acc[i.driver_number] || i.date > acc[i.driver_number].date)
-            acc[i.driver_number] = i
-          return acc
-        }, {})
-      )
+      const latestPositions = latestPerDriver(positions)
+        .sort((a, b) => a.position - b.position)
+
+      const latestIntervals = latestPerDriver(intervals)
 
       const latestWeather = weatherArr.length
         ? weatherArr.reduce((a, b) => (a.date > b.date ? a : b))
@@ -141,13 +130,14 @@ export function useRaceData(sessionKey: number, sessionDateEnd: string | null = 
         ...prev,
         drivers, laps, stints, pits, raceControl, teamRadio,
         positions: latestPositions,
-        allPositions: positions,  // keep every record for replay
+        allPositions: positions,
         intervals: latestIntervals,
         weather: latestWeather,
         overtakes: newOvertakes.length
           ? [...prev.overtakes.slice(-50), ...newOvertakes]
           : prev.overtakes,
         positionChanges: Object.keys(changes).length > 0 ? changes : prev.positionChanges,
+        totalLaps: totalLaps || prev.totalLaps,
         loading: false,
         error: null,
       }))
@@ -162,9 +152,8 @@ export function useRaceData(sessionKey: number, sessionDateEnd: string | null = 
 
   useEffect(() => {
     fetchAll()
-    const interval = isHistorical(sessionDateEnd) ? HISTORICAL_POLL : LIVE_POLL
-    if (interval > 0) {
-      pollRef.current = setInterval(fetchAll, interval)
+    if (!isHistorical(sessionDateEnd)) {
+      pollRef.current = setInterval(fetchAll, LIVE_POLL_MS)
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)

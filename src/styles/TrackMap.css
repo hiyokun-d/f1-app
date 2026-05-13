@@ -1,0 +1,12 @@
+/* ── SVG driver pulse ring (selected driver on track map) ────────────────── */
+/* transform-box: fill-box required for SVG transforms to work correctly */
+.driver-pulse-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: driver-ring-pulse 1.8s ease-out infinite;
+}
+
+@keyframes driver-ring-pulse {
+  0%   { transform: scale(1);   opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}

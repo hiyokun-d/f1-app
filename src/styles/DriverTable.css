@@ -1,0 +1,285 @@
+/* ── Tyre compound badges ─────────────────────────────────────────────────── */
+.tyre-soft     { background: #e8002d; }
+.tyre-medium   { background: #ffd600; color: #000; }
+.tyre-hard     { background: #ffffff; color: #000; }
+.tyre-inter    { background: #39b54a; }
+.tyre-wet      { background: #0067ff; }
+
+/* ── Driver table layout ─────────────────────────────────────────────────── */
+
+/* Wrapper: full-width in compact so 1fr expands and GAP sits at right edge */
+.driver-table-wrapper {
+  width: 100%;
+}
+.driver-table-expanded .driver-table-wrapper {
+  display: inline-block;
+  vertical-align: top;
+  width: auto;
+}
+
+/* GAP cell: right-anchored in compact, centered in expanded */
+.driver-gap-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+}
+.driver-table-expanded .driver-gap-cell {
+  justify-content: center;
+  text-align: center;
+}
+
+/* Last driver compact: swap gap→lap-time; expanded: swap back */
+.last-driver-gap .gap-value { display: none; }
+.last-driver-gap .last-time-value {
+  display: block;
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: -0.03em;
+  color: #6b7280;
+  text-align: right;
+}
+.driver-table-expanded .last-driver-gap .gap-value { display: block; }
+.driver-table-expanded .last-driver-gap .last-time-value { display: none; }
+
+/* Compact: pos | tyre | name+badges | gap */
+.driver-row {
+  display: grid;
+  grid-template-columns: 28px 38px 1fr 76px;
+  column-gap: 8px;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* Expanded: pos | tyre+age | name+headshot | gap | int | lap_time | pit */
+.driver-table-expanded .driver-row {
+  grid-template-columns: 28px 36px 110px 74px 70px 96px 56px;
+  column-gap: 8px;
+  overflow: hidden;
+}
+
+/* Expanded container: horizontal scroll when rows wider than panel */
+.driver-table-expanded {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+.driver-table-expanded:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.driver-table-expanded::-webkit-scrollbar { height: 3px; }
+.driver-table-expanded::-webkit-scrollbar-track { background: transparent; }
+.driver-table-expanded::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.3s ease;
+}
+.driver-table-expanded:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); }
+.driver-table-expanded::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* Driver headshot avatar — hidden compact, shown expanded */
+.driver-headshot {
+  display: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+.driver-table-expanded .driver-headshot { display: block; }
+
+/* Country flag emoji — hidden compact, shown expanded */
+.driver-country-flag {
+  display: none;
+  font-size: 8px;
+  line-height: 1;
+}
+.driver-table-expanded .driver-country-flag { display: inline; }
+
+/* Detail columns hidden until expanded */
+.driver-detail { display: none; }
+.driver-table-expanded .driver-detail {
+  display: flex;
+  align-items: center;
+  animation: detail-enter 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes detail-enter {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Sub-labels inside cells — only visible in expanded mode */
+.driver-tyre-age,
+.driver-team-sub,
+.driver-lap-sub,
+.driver-pit-sub { display: none; }
+.driver-table-expanded .driver-tyre-age,
+.driver-table-expanded .driver-team-sub,
+.driver-table-expanded .driver-lap-sub,
+.driver-table-expanded .driver-pit-sub { display: block; }
+
+/* Column header row */
+.driver-header-row {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--f1-dark);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.driver-col-label {
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #3a4258;
+  text-transform: uppercase;
+}
+
+/* ── AnimeJS overlay initial states ──────────────────────────────────────────
+   MUST be in CSS — not inline React style props.
+   If set via React style={}, every re-render resets what AnimeJS animated. */
+
+.pit-overlay    { background-color: transparent; }
+.overtake-overlay { background-color: transparent; }
+.select-overlay { background-color: transparent; }
+.hover-overlay  { background-color: transparent; }
+.pit-label      { opacity: 0; }
+.pit-time       { opacity: 0; }
+.pass-label     { opacity: 0; }
+.lost-label     { opacity: 0; }
+
+.drs-strip {
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.pit-inline {
+  opacity: 0;
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #22c55e;
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+}
+
+.rail-arrow { opacity: 0; }
+
+.rail-drs {
+  opacity: 0;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+  background: #00ff88;
+}
+.rail-drs-active {
+  animation: rail-drs-breathe 1.6s ease-in-out infinite;
+}
+
+/* ── Position number animations ──────────────────────────────────────────── */
+
+.animate-pos-up   { animation: pos-up   0.58s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.animate-pos-down { animation: pos-down 0.58s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.change-arrow     { animation: arrow-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+@keyframes pos-up {
+  0%   { transform: translateY(12px) scale(0.65); opacity: 0; }
+  50%  { transform: translateY(-5px) scale(1.28); opacity: 1; }
+  75%  { transform: translateY(1px)  scale(0.96); }
+  100% { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+@keyframes pos-down {
+  0%   { transform: translateY(-12px) scale(0.65); opacity: 0; }
+  50%  { transform: translateY(5px)   scale(1.28); opacity: 1; }
+  75%  { transform: translateY(-1px)  scale(0.96); }
+  100% { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+@keyframes arrow-in {
+  0%   { opacity: 0; transform: scale(0.4) translateY(4px); }
+  60%  { transform: scale(1.2) translateY(-1px); opacity: 1; }
+  100% { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+/* ── DRS strip animations ─────────────────────────────────────────────────── */
+
+@keyframes drs-strip-pulse {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(0, 255, 136, 0.5), 0 0 14px rgba(0, 255, 136, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(0, 255, 136, 1), 0 0 44px rgba(0, 255, 136, 0.5);
+  }
+}
+.drs-strip-active { animation: drs-strip-pulse 1.8s ease-in-out infinite; }
+
+@keyframes rail-drs-breathe {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Status badge keyframes ───────────────────────────────────────────────── */
+
+@keyframes drs-badge-pulse {
+  0%, 100% { background: rgba(0, 255, 136, 0.1); }
+  50%       { background: rgba(0, 255, 136, 0.22); box-shadow: 0 0 8px rgba(0, 255, 136, 0.25); }
+}
+@keyframes pit-now-pulse {
+  0%, 100% { background: rgba(239, 68, 68, 0.14); box-shadow: none; }
+  50%       { background: rgba(239, 68, 68, 0.28); box-shadow: 0 0 8px rgba(239, 68, 68, 0.35); }
+}
+
+/* ── Tyre glow animations ─────────────────────────────────────────────────── */
+
+@keyframes tyre-pit-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 185, 0, 0.6)); }
+  50%       { filter: drop-shadow(0 0 10px rgba(255, 185, 0, 1)) drop-shadow(0 0 22px rgba(255, 185, 0, 0.55)); }
+}
+@keyframes tyre-out-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(34, 197, 94, 0.5)); }
+  50%       { filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.9)) drop-shadow(0 0 22px rgba(34, 197, 94, 0.45)); }
+}
+.tyre-badge-pit-glow { animation: tyre-pit-glow 1s ease-in-out infinite; }
+.tyre-badge-out-glow { animation: tyre-out-glow 1.4s ease-in-out infinite; }
+
+/* Pit glow (non-SVG uses) */
+@keyframes pit-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(255, 185, 0, 0.4), 0 0 8px rgba(255, 185, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(255, 185, 0, 0.7), 0 0 20px rgba(255, 185, 0, 0.8), 0 0 36px rgba(255, 185, 0, 0.3);
+  }
+}
+.animate-pit-glow { animation: pit-glow 1s ease-in-out infinite; }
+
+/* ── Flash animations (position changes) ─────────────────────────────────── */
+
+@keyframes flash-up {
+  0%   { background: rgba(34, 197, 94, 0.2); box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.3); }
+  60%  { background: rgba(34, 197, 94, 0.08); }
+  100% { background: transparent; box-shadow: none; }
+}
+@keyframes flash-down {
+  0%   { background: rgba(239, 68, 68, 0.2); box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.3); }
+  60%  { background: rgba(239, 68, 68, 0.08); }
+  100% { background: transparent; box-shadow: none; }
+}
+.animate-flash-up   { animation: flash-up   2s ease forwards; }
+.animate-flash-down { animation: flash-down 2s ease forwards; }
+
+/* Row stagger helper */
+.row-enter {
+  animation: row-enter 0.3s ease forwards;
+  animation-delay: var(--delay, 0ms);
+  opacity: 0;
+}
+@keyframes row-enter {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}

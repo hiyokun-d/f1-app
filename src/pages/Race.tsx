@@ -56,7 +56,7 @@ export default function Race() {
     replay.replayTime,
   );
 
-  useDriverTelemetryPrefetch(key, driverNumbers, effectiveDriver, sessionDateEnd, carBufferEnd);
+  useDriverTelemetryPrefetch(key, driverNumbers, effectiveDriver, sessionDateEnd, replay.replayTime, carBufferEnd);
 
   const bufferProgress = useMemo(() => {
     if (!carBufferEnd || !sessionDateStart || !sessionDateEnd) return 0

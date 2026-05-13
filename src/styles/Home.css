@@ -32,21 +32,33 @@
   100% { transform: scaleX(1); }
 }
 
+/* ── Contributor hover popup — position set inline via state ─────────────── */
+.contrib-popup {
+  position: fixed;  /* inline style sets bottom/left/transform */
+  opacity: 0;       /* AnimeJS reveals */
+  pointer-events: none;
+  z-index: 9999;
+}
+
 /* ── Contributor footer links — AnimeJS owns all animation ───────────────── */
-.contributor-link {
-  color: #7a8494;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.contributor-author {
-  color: #8a4454;
-  text-decoration: none;
-  display: inline-block;
-}
-
+.contributor-link,
+.contributor-author,
 .repo-link {
-  color: #5a6272;
+  opacity: 0; /* AnimeJS reveals on entry */
   text-decoration: none;
   display: inline-block;
+  cursor: pointer;
+}
+
+/* Badge base — padding makes background visible; AnimeJS animates bg */
+.contributor-author {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(232, 0, 45, 0); /* AnimeJS owns this */
+}
+
+.contributor-link {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(58, 90, 122, 0); /* AnimeJS owns this */
 }

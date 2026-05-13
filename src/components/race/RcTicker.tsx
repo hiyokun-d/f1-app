@@ -1,5 +1,5 @@
-import type { RaceControl } from '../../../types'
-import { flagColor } from '../../../utils/format'
+import type { RaceControl } from '../../types'
+import { flagColor } from '../../utils/format'
 
 interface Props {
   messages: RaceControl[]

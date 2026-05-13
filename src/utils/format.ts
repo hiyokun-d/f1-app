@@ -30,23 +30,6 @@ export function formatSpeed(speed: number | null): string {
   return `${speed} km/h`;
 }
 
-export function tyreColor(compound: string): string {
-  switch (compound) {
-    case "SOFT":
-      return "#e8002d";
-    case "MEDIUM":
-      return "#ffd600";
-    case "HARD":
-      return "#ffffff";
-    case "INTERMEDIATE":
-      return "#39b54a";
-    case "WET":
-      return "#0067ff";
-    default:
-      return "#888888";
-  }
-}
-
 export function flagColor(flag: string | null): string {
   switch (flag) {
     case "GREEN":

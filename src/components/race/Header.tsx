@@ -1,7 +1,8 @@
+import "../../styles/Header.css";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Weather, RaceControl } from "../../types";
 import { flagColor } from "../../utils/format";
-import AnimatedValue from "../common/AnimatedValue";
+import AnimatedValue from "../ui/AnimatedValue";
 import { animate, createTimeline, spring } from "animejs";
 
 interface Props {
@@ -203,21 +204,6 @@ export default function Header({
         },
         0,
       );
-
-      // White glow pulse across the header
-      // tl.add(
-      //   header,
-      //   {
-      //     boxShadow: [
-      //       "0 0 0px rgba(255,255,255,0)",
-      //       "0 3px 60px rgba(255,255,255,0.6), 0 -2px 40px rgba(255,255,255,0.3)",
-      //       "0 1px 12px rgba(255,255,255,0.08)",
-      //     ],
-      //     duration: 3200,
-      //     ease: "outCubic",
-      //   },
-      //   80,
-      // );
 
       // Settle overlay at reduced opacity
       tl.add(
@@ -525,7 +511,7 @@ export default function Header({
                       transition: "color 0.35s ease",
                     }}
                   >
-                    S{i+1}                  </span>
+                    S{i+1}</span>
                   <span
                     style={{
                       fontFamily: "var(--font-data)",

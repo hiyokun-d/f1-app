@@ -132,3 +132,23 @@ Team radio audio files are served via `/f1-audio` proxy (`vite.config.ts`) to by
 ### Currently commented-out components
 
 `Header` and `TelemetryPanel` are wired up in `Race.tsx` but JSX-commented out. Their props and data derivation are still present.
+
+### Code reuse rule
+
+Before writing any new UI — check `src/components/ui/` first. If the pattern exists there, import it. If a pattern appears in 2+ components, extract it to `src/components/ui/` and replace both usages. Never duplicate logic or JSX that already lives in a shared component.
+
+Current shared components:
+- `AnimatedValue` — slot-machine number flip with configurable format function
+- `GapDisplay` — gap/interval string formatting and coloring (leader vs interval)
+
+### Data prefetching
+
+`prefetchRaceData(sessionKey)` in `src/utils/prefetch.ts` warms the API cache before the user navigates to the Race page. Called on Home mount during the lights animation. When Race.tsx mounts and hooks fire, they get cache hits instead of network requests — eliminates the loading screen for pre-warmed sessions.
+
+### Page transitions
+
+All route navigation uses React Router v7's View Transitions API:
+- `navigate(path, { viewTransition: true })` for imperative nav
+- `<Link viewTransition>` for declarative links
+
+CSS in `src/styles/global.css` (`::view-transition-old/new`) — subtle scale + blur fade, 0.2s exit / 0.35s enter.

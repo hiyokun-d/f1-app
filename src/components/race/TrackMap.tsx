@@ -1,3 +1,4 @@
+import "../../styles/TrackMap.css";
 import { memo } from 'react'
 import type { Driver } from '../../types'
 import type { TrackPoint, LivePosition } from '../../hooks/useTrackMap'

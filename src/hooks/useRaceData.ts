@@ -51,6 +51,10 @@ function detectOvertakes(prev: Position[], next: Position[], laps: Lap[]): Overt
   return events
 }
 
+async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try { return await promise } catch { return fallback }
+}
+
 export function useRaceData(sessionKey: number, sessionDateEnd: string | null = null) {
   const [state, setState] = useState<RaceState>({
     drivers: [], positions: [], allPositions: [], intervals: [], laps: [],
@@ -64,10 +68,6 @@ export function useRaceData(sessionKey: number, sessionDateEnd: string | null = 
   const changeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchAll = useCallback(async () => {
-    async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
-      try { return await promise } catch { return fallback }
-    }
-
     try {
       const params = { session_key: sessionKey }
 

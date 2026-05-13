@@ -16,8 +16,8 @@ import { TYRE_COLORS, TYRE_LIFE_LAPS, type BadgeVariant } from "./constants";
 import { StatusBadge } from "./StatusBadge";
 import { TyreBadge } from "./TyreBadge";
 import { PositionNumber } from "./PositionNumber";
-import AnimatedValue from "../../common/AnimatedValue";
-import { GapDisplay } from "../../common/GapDisplay";
+import AnimatedValue from "../../ui/AnimatedValue";
+import { GapDisplay } from "../../ui/GapDisplay";
 
 interface DriverRowProps {
   pos: Position;

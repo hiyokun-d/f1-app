@@ -170,7 +170,7 @@ export interface OvertakeEvent {
   timestamp: string
 }
 
-// OpenF1 /overtakes endpoint
+// Locally detected overtake (from /overtakes endpoint)
 export interface Overtake {
   date: string
   driver_number_fastest: number
@@ -219,17 +219,3 @@ export interface ChampionshipTeam {
   session_key: number
   team_name: string
 }
-
-export type TyreCompound = Stint['compound']
-
-export type Flag =
-  | 'GREEN'
-  | 'YELLOW'
-  | 'DOUBLE YELLOW'
-  | 'RED'
-  | 'BLUE'
-  | 'CHEQUERED'
-  | 'BLACK AND WHITE'
-  | 'SAFETY CAR'
-  | 'VIRTUAL SAFETY CAR'
-  | null

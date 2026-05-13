@@ -1,0 +1,36 @@
+/* ── Flag change banner slide-in ─────────────────────────────────────────── */
+.animate-slide-down { animation: slide-down 0.22s ease; }
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Chequered flag celebration overlay ─────────────────────────────────── */
+
+/* AnimeJS owns opacity — never set via React style */
+.header-chequered-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background-image:
+    linear-gradient(45deg,  rgba(255,255,255,0.055) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,0.055) 25%, transparent 25%),
+    linear-gradient(45deg,  transparent 75%, rgba(255,255,255,0.055) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.055) 75%);
+  background-size: 16px 16px;
+  animation: checkered-drift 0.55s linear infinite;
+}
+
+@keyframes checkered-drift {
+  from { background-position: 0 0; }
+  to   { background-position: 16px 16px; }
+}
+
+/* ── Lap counter ambient glow ─────────────────────────────────────────────── */
+@keyframes lap-glow-breathe {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}

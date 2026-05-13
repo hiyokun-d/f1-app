@@ -1,3 +1,4 @@
+import "../../../styles/DriverTable.css";
 import { useMemo, useRef, useState } from "react";
 import { useCarData } from "../../../hooks/useCarData";
 import type {
@@ -9,7 +10,7 @@ import type {
   Pit,
   OvertakeEvent,
 } from "../../../types";
-import { useDriverTableAnimations } from "./useDriverTableAnimations";
+import { useAnimations } from "./useAnimations";
 import { DriverRow } from "./DriverRow";
 
 interface Props {
@@ -188,7 +189,7 @@ export default function DriverTable({
     return m;
   }, [laps, pits, lapMap, maxLap]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useDriverTableAnimations({
+  useAnimations({
     containerRef,
     positions,
     positionChanges,

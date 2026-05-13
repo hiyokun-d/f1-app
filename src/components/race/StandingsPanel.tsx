@@ -8,9 +8,9 @@ import type {
   Stint,
   Pit,
   OvertakeEvent,
-} from "../../../types";
-import DriverTable from "../DriverTable/index";
-import ResizeHandle from "../ResizeHandle";
+} from "../../types";
+import DriverTable from "./DriverTable/DriverTable";
+import ResizeHandle from "./ResizeHandle";
 
 interface Props {
   // Layout

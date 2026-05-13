@@ -118,11 +118,11 @@ export const openF1 = {
   weather: (params?: { session_key?: number; meeting_key?: number }) =>
     get<Weather>('/weather', params),
 
-  overtakes: (params?: { session_key?: number }) =>
-    get<import('../types').Overtake>('/overtakes', params),
-
   sessionResult: (params?: { session_key?: number; driver_number?: number }) =>
     get<import('../types').SessionResult>('/session_result', params),
+
+  overtakes: (params?: { session_key?: number }) =>
+    get<import('../types').Overtake>('/overtakes', params),
 
   startingGrid: (params?: { session_key?: number }) =>
     get<import('../types').StartingGrid>('/starting_grid', params),

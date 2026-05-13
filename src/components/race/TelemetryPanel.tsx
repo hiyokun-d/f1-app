@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { animate } from 'animejs'
-import type { Driver, CarData, Lap, Stint, TeamRadio } from '../../../types'
-import Telemetry from '../Telemetry'
-import TeamRadioPlayer from '../TeamRadioPlayer'
-import ResizeHandle from '../ResizeHandle'
+import type { Driver, CarData, Lap, Stint, TeamRadio } from '../../types'
+import Telemetry from './Telemetry'
+import TeamRadioPlayer from './TeamRadioPlayer'
+import ResizeHandle from './ResizeHandle'
 
 interface Props {
   // Layout

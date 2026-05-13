@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { animate, stagger, createScope } from 'animejs'
-import type { Driver, OvertakeEvent } from '../../../types'
-import { teamHex } from '../../../utils/format'
+import type { Driver, OvertakeEvent } from '../../types'
+import { teamHex } from '../../utils/format'
 
 interface Props {
   overtake: OvertakeEvent

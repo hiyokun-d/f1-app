@@ -1,5 +1,7 @@
+import "../styles/Home.css";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePrefetchOnVisible } from "../hooks/usePrefetchOnVisible";
 
 const TITLE_LETTERS = ["R", "A", "C", "E", " ", "C", "E", "N", "T", "E", "R"];
 
@@ -65,6 +67,7 @@ export default function Home() {
   const [titleVisible, setTitleVisible] = useState(false);
   const [cardVisible, setCardVisible] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const cardRef = usePrefetchOnVisible<HTMLButtonElement>(SESSION.key);
 
   useEffect(() => {
     // Staggered intro sequence
@@ -248,7 +251,8 @@ export default function Home() {
           }}
         >
           <button
-            onClick={() => navigate(`/race/${SESSION.key}`)}
+            ref={cardRef}
+            onClick={() => navigate(`/race/${SESSION.key}`, { viewTransition: true })}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
             className="group relative overflow-hidden text-left"

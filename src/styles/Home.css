@@ -31,3 +31,22 @@
   20%  { transform: scaleX(1.04); }
   100% { transform: scaleX(1); }
 }
+
+/* ── Contributor footer links — AnimeJS owns all animation ───────────────── */
+.contributor-link {
+  color: #7a8494;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.contributor-author {
+  color: #8a4454;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.repo-link {
+  color: #5a6272;
+  text-decoration: none;
+  display: inline-block;
+}

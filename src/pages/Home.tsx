@@ -1,6 +1,7 @@
 import "../styles/Home.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { animate, createScope } from "animejs";
 import { usePrefetchOnVisible } from "../hooks/usePrefetchOnVisible";
 
 const TITLE_LETTERS = ["R", "A", "C", "E", " ", "C", "E", "N", "T", "E", "R"];
@@ -58,6 +59,26 @@ function StartingLights({
   );
 }
 
+const REPO = "hiyokun-d/f1-app";
+const AUTHOR = "hiyokun-d";
+
+interface Contributor {
+  login: string;
+  html_url: string;
+  avatar_url: string;
+}
+
+function useContributors() {
+  const [contributors, setContributors] = useState<Contributor[]>([]);
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${REPO}/contributors?per_page=10`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: Contributor[]) => setContributors(data.filter((c) => !c.login.includes("[bot]"))))
+      .catch(() => {});
+  }, []);
+  return contributors;
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [lightsPhase, setLightsPhase] = useState<"off" | "lighting" | "go">(
@@ -68,6 +89,76 @@ export default function Home() {
   const [cardVisible, setCardVisible] = useState(false);
   const [hovered, setHovered] = useState(false);
   const cardRef = usePrefetchOnVisible<HTMLButtonElement>(SESSION.key);
+  const contributors = useContributors();
+  const taglineRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!taglineRef.current || contributors.length === 0) return;
+
+    const scope = createScope({ root: taglineRef.current });
+    const cleanups: (() => void)[] = [];
+
+    const setupLink = (el: HTMLElement, isAuthor: boolean) => {
+      const baseColor   = isAuthor ? "#8a4454" : "#7a8494";
+      const hoverColor  = isAuthor ? "#e8002d" : "#a8b4c4";
+      const idleGlow    = isAuthor
+        ? "0 0 10px rgba(232,0,45,0.32)"
+        : "0 0 6px rgba(120,132,148,0.35)";
+      const hoverGlow   = isAuthor
+        ? "0 0 12px rgba(232,0,45,0.6), 0 0 26px rgba(232,0,45,0.18)"
+        : "0 0 8px rgba(168,180,196,0.45)";
+      const hoverScale  = isAuthor ? 1.07 : 1.02;
+      const idleDur     = isAuthor ? 2500 : 3200;
+
+      scope.add(() => {
+        const idle = animate(el, {
+          textShadow: ["0 0 0px rgba(0,0,0,0)", idleGlow],
+          loop: true,
+          alternate: true,
+          duration: idleDur,
+          ease: "inOutSine",
+        });
+
+        const onEnter = () => {
+          idle.pause();
+          animate(el, {
+            color: hoverColor,
+            textShadow: hoverGlow,
+            scale: hoverScale,
+            duration: 220,
+            ease: "outQuart",
+          });
+        };
+
+        const onLeave = () => {
+          animate(el, {
+            color: baseColor,
+            textShadow: "0 0 0px rgba(0,0,0,0)",
+            scale: 1,
+            duration: 350,
+            ease: "outQuart",
+            onComplete: () => idle.play(),
+          });
+        };
+
+        el.addEventListener("mouseenter", onEnter);
+        el.addEventListener("mouseleave", onLeave);
+        cleanups.push(() => {
+          el.removeEventListener("mouseenter", onEnter);
+          el.removeEventListener("mouseleave", onLeave);
+        });
+      });
+    };
+
+    taglineRef.current
+      .querySelectorAll<HTMLElement>(".contributor-link, .contributor-author, .repo-link")
+      .forEach((el) => setupLink(el, el.classList.contains("contributor-author")));
+
+    return () => {
+      cleanups.forEach((fn) => fn());
+      scope.revert();
+    };
+  }, [contributors]);
 
   useEffect(() => {
     // Staggered intro sequence
@@ -376,6 +467,7 @@ export default function Home() {
 
         {/* Tagline */}
         <div
+          ref={taglineRef}
           className="text-center"
           style={{
             opacity: cardVisible ? 1 : 0,
@@ -386,7 +478,43 @@ export default function Home() {
             className="text-[10px] uppercase tracking-[0.3em]"
             style={{ fontFamily: "var(--font-display)", color: "#5a6272" }}
           >
-            Made with ♥ by hiyo and Nerovyn
+            Made with ♥ by{" "}
+            {contributors.length > 0 ? (
+              contributors.map((c, i) => {
+                const isAuthor = c.login === AUTHOR;
+                return (
+                  <span key={c.login}>
+                    {i > 0 && (i === contributors.length - 1 ? " and " : ", ")}
+                    <a
+                      href={c.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={isAuthor ? "contributor-author" : "contributor-link"}
+                    >
+                      {c.login}
+                    </a>
+                  </span>
+                );
+              })
+            ) : (
+              <a
+                href={`https://github.com/${REPO}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="contributor-link"
+              >
+                the team
+              </a>
+            )}
+            {" · "}
+            <a
+              href={`https://github.com/${REPO}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="repo-link"
+            >
+              view repo
+            </a>
           </p>
         </div>
       </div>

@@ -302,7 +302,7 @@ export function DriverRow({
       </div>
 
       {/* Position number */}
-      <div className="flex items-center pl-1.5 z-10 gap-1">
+      <div className="relative flex items-center pl-1.5 z-10 gap-1">
         <PositionNumber pos={pos.position} change={change} />
         {change && (
           <span
@@ -318,6 +318,51 @@ export function DriverRow({
             {change === "up" ? "▲" : "▼"}
           </span>
         )}
+        {/* pit-in icon amber 'P'*/}
+        <span
+          data-rail-pit={pos.driver_number}
+          className="pointer-events-none"
+          style={{
+            opacity: 0,
+            fontSize: 9,
+            fontWeight: 900,
+            color: "#ffb900",
+            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(255,185,0,0.8)",
+            lineHeight: 1,
+          }}
+        >
+          P
+        </span>
+        {/* pit-out icon green arrow*/}
+        <span
+          data-rail-out={pos.driver_number}
+          className="pointer-events-none"
+          style={{
+            opacity: 0,
+            fontSize: 10,
+            fontWeight: 900,
+            color: "#22c55e",
+            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(34,197,94,0.8)",
+            lineHeight: 1,
+          }}
+        >
+          ↑
+        </span>
+        {/* fastest-lap icon purple ★*/}
+        <span
+          data-rail-fl={pos.driver_number}
+          className="pointer-events-none"
+          style={{
+            opacity: 0,
+            fontSize: 9,
+            color: "#a855f7",
+            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(168,85,247,0.9)",
+            lineHeight: 1,
+            marginLeft: -3,
+          }}
+        >
+          ★
+        </span>
       </div>
 
       {/* Tyre compound badge + age sub-label (age only visible in expanded) */}

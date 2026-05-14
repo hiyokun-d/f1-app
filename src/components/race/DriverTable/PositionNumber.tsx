@@ -28,6 +28,8 @@ export function PositionNumber({
       }
       style={{
         display: "inline-block",
+        width: "2ch",
+        textAlign: "right",
         fontFamily: "var(--font-data)",
         fontWeight: 900,
         fontSize: 15,

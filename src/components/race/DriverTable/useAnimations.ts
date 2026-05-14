@@ -76,6 +76,9 @@ export function useAnimations({
   const pitAnimRef = useRef<Map<number, ReturnType<typeof createTimeline>>>(
     new Map(),
   );
+  const railPitAnimRef = useRef<Map<number, ReturnType<typeof createTimeline>>>(
+    new Map(),
+  );
   // Guards rail animation from re-firing every 250ms tick when only `positions`
   // ref changed but `positionChanges` content did not.
   const lastPosChangesAnimRef = useRef<Record<number, "up" | "down"> | null>(
@@ -250,14 +253,21 @@ export function useAnimations({
       const prevTl = pitAnimRef.current.get(dn);
       if (prevTl) prevTl.pause();
 
+      const prevRailTl = railPitAnimRef.current.get(dn);
+      if (prevRailTl) prevRailTl.pause();
+
       const bg = c.querySelector<HTMLElement>(`[data-pit-bg="${dn}"]`);
       const label = c.querySelector<HTMLElement>(`[data-pit-label="${dn}"]`);
       const gapText = c.querySelector<HTMLElement>(`[data-gap-text="${dn}"]`);
       const pitInline = c.querySelector<HTMLElement>(
         `[data-pit-inline="${dn}"]`,
       );
+      const rail = c.querySelector<HTMLElement>(`[data-team-rail="${dn}"]`);
+      const railPitIcon = c.querySelector<HTMLElement>(`[data-rail-pit="${dn}"]`);
+      const railOutIcon = c.querySelector<HTMLElement>(`[data-rail-out="${dn}"]`);
 
       if (status === "pitting") {
+        // ── Pit overlay (existing) ──
         const tl = createTimeline({ defaults: { ease: "outQuart" } });
         pitAnimRef.current.set(dn, tl);
         if (bg)
@@ -288,7 +298,12 @@ export function useAnimations({
           );
         }
         if (pitInline) tl.add(pitInline, { opacity: 0, duration: 120 }, 0);
+
+        // ── Rail pit-in icon — fade in P, hold until status clears ──
+        if (railOutIcon) animate(railOutIcon, { opacity: 0, duration: 100 });
+        if (railPitIcon) animate(railPitIcon, { opacity: 1, duration: 200, ease: "outQuad" });
       } else if (status === "just_out") {
+        // ── Pit overlay (existing) ──
         const tl = createTimeline({ defaults: { ease: "outCubic" } });
         pitAnimRef.current.set(dn, tl);
         // Animate from current values — previous tl may have been paused mid-flight.
@@ -318,6 +333,14 @@ export function useAnimations({
             { opacity: [0, 1], duration: 350, ease: "outQuad" },
             5180,
           );
+
+        if (railPitIcon) animate(railPitIcon, { opacity: 0, duration: 140 });
+        if (railOutIcon) {
+          const railTl = createTimeline();
+          railPitAnimRef.current.set(dn, railTl);
+          railTl.add(railOutIcon, { opacity: [0, 1], duration: 200, ease: "outQuad" }, 0);
+          railTl.add(railOutIcon, { opacity: [1, 0], duration: 220, ease: "inQuart" }, 4000);
+        }
       }
     });
 
@@ -327,12 +350,18 @@ export function useAnimations({
       const prevTl = pitAnimRef.current.get(dn);
       if (prevTl) prevTl.pause();
       pitAnimRef.current.delete(dn);
+      const prevRailTl = railPitAnimRef.current.get(dn);
+      if (prevRailTl) prevRailTl.pause();
+      railPitAnimRef.current.delete(dn);
       const bg = c.querySelector<HTMLElement>(`[data-pit-bg="${dn}"]`);
       const label = c.querySelector<HTMLElement>(`[data-pit-label="${dn}"]`);
       const gapText = c.querySelector<HTMLElement>(`[data-gap-text="${dn}"]`);
       const pitInline = c.querySelector<HTMLElement>(
         `[data-pit-inline="${dn}"]`,
       );
+      const rail = c.querySelector<HTMLElement>(`[data-team-rail="${dn}"]`);
+      const railPitIcon = c.querySelector<HTMLElement>(`[data-rail-pit="${dn}"]`);
+      const railOutIcon = c.querySelector<HTMLElement>(`[data-rail-out="${dn}"]`);
       // Single-target form: animates from current paused state — avoids snapping
       // if the bg was yellow rather than green when the timeline was paused.
       if (bg)
@@ -344,6 +373,8 @@ export function useAnimations({
       if (label) animate(label, { opacity: 0, duration: 200 });
       if (gapText) animate(gapText, { opacity: 1, duration: 200 });
       if (pitInline) animate(pitInline, { opacity: 0, duration: 200 });
+      if (railPitIcon) animate(railPitIcon, { opacity: 0, duration: 200 });
+      if (railOutIcon) animate(railOutIcon, { opacity: 0, duration: 200 });
     });
 
     prevPitRef.current = new Map(pitStatusMap);

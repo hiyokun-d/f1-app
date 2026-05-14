@@ -327,7 +327,8 @@ export function DriverRow({
             fontSize: 9,
             fontWeight: 900,
             color: "#ffb900",
-            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(255,185,0,0.8)",
+            textShadow:
+              "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(255,185,0,0.8)",
             lineHeight: 1,
           }}
         >
@@ -342,26 +343,12 @@ export function DriverRow({
             fontSize: 10,
             fontWeight: 900,
             color: "#22c55e",
-            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(34,197,94,0.8)",
+            textShadow:
+              "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(34,197,94,0.8)",
             lineHeight: 1,
           }}
         >
           ↑
-        </span>
-        {/* fastest-lap icon purple ★*/}
-        <span
-          data-rail-fl={pos.driver_number}
-          className="pointer-events-none"
-          style={{
-            opacity: 0,
-            fontSize: 9,
-            color: "#a855f7",
-            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(168,85,247,0.9)",
-            lineHeight: 1,
-            marginLeft: -3,
-          }}
-        >
-          ★
         </span>
       </div>
 
@@ -439,7 +426,11 @@ export function DriverRow({
             </span>
             {activeBadges.map((v) => {
               if (v === "fl") return <StatusBadge key={v} variant={v} />;
-              if (currentlap !== null && totalLaps !== null && currentlap <= totalLaps - 2)
+              if (
+                currentlap !== null &&
+                totalLaps !== null &&
+                currentlap <= totalLaps - 2
+              )
                 return <StatusBadge key={v} variant={v} />;
               return null;
             })}
@@ -480,9 +471,7 @@ export function DriverRow({
           />
         </span>
         {isLast && lapDuration !== null && (
-          <span className="last-time-value">
-            {formatLapTime(lapDuration)}
-          </span>
+          <span className="last-time-value">{formatLapTime(lapDuration)}</span>
         )}
         {pitDuration != null && !isLeader && (
           <span
@@ -698,7 +687,7 @@ export function DriverRow({
           </span>
         )}
       </div>
-
     </div>
   );
 }
+

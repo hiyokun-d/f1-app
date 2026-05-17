@@ -11,9 +11,6 @@ export interface TrackMapState {
   ready: boolean
 }
 
-export const SVG_W = 500
-export const SVG_H = 380
-
 interface Bounds { minX: number; maxX: number; minY: number; maxY: number }
 
 function calcBounds(pts: TrackPoint[]): Bounds {
@@ -25,15 +22,21 @@ function calcBounds(pts: TrackPoint[]): Bounds {
   }
 }
 
-function normalizePoints(pts: TrackPoint[], bounds: Bounds, pad = 30): TrackPoint[] {
+function normalizePoints(
+  pts: TrackPoint[],
+  bounds: Bounds,
+  svgW: number,
+  svgH: number,
+  pad = 40,
+): TrackPoint[] {
   const rangeX = bounds.maxX - bounds.minX || 1
   const rangeY = bounds.maxY - bounds.minY || 1
-  const scale = Math.min((SVG_W - pad * 2) / rangeX, (SVG_H - pad * 2) / rangeY)
-  const offsetX = (SVG_W - rangeX * scale) / 2
-  const offsetY = (SVG_H - rangeY * scale) / 2
+  const scale = Math.min((svgW - pad * 2) / rangeX, (svgH - pad * 2) / rangeY)
+  const offsetX = (svgW - rangeX * scale) / 2
+  const offsetY = (svgH - rangeY * scale) / 2
   return pts.map(p => ({
     x: (p.x - bounds.minX) * scale + offsetX,
-    y: SVG_H - ((p.y - bounds.minY) * scale + offsetY), // flip Y
+    y: svgH - ((p.y - bounds.minY) * scale + offsetY),
   }))
 }
 
@@ -42,13 +45,35 @@ export function useTrackMap(
   driverNumbers: number[],
   sessionDateStart: string | null = null,
   sessionDateEnd: string | null = null,
+  containerW = 800,
+  containerH = 600,
 ) {
-  const [state, setState] = useState<TrackMapState>({ outline: [], livePositions: [], ready: false })
+  const [state, setState] = useState<TrackMapState>({
+    outline: [],
+    livePositions: [],
+    ready: false,
+  })
+
+  const rawOutlineRef = useRef<TrackPoint[]>([])
   const boundsRef = useRef<Bounds | null>(null)
   const initDoneRef = useRef(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const driversRef = useRef<number[]>(driverNumbers)
   driversRef.current = driverNumbers
+
+  // Re-normalize outline when container resizes
+  const containerWRef = useRef(containerW)
+  const containerHRef = useRef(containerH)
+  containerWRef.current = containerW
+  containerHRef.current = containerH
+
+  useEffect(() => {
+    if (!rawOutlineRef.current.length || !boundsRef.current) return
+    setState(prev => ({
+      ...prev,
+      outline: normalizePoints(rawOutlineRef.current, boundsRef.current!, containerW, containerH),
+    }))
+  }, [containerW, containerH])
 
   const initOutline = useCallback(async () => {
     if (initDoneRef.current || !driversRef.current.length) return
@@ -61,25 +86,28 @@ export function useTrackMap(
       }
 
       if (historical && sessionDateStart) {
-        // For historical sessions: first 10 minutes of the session = track outline
         const start = new Date(sessionDateStart)
         const end = new Date(start.getTime() + 600_000)
         params['date>'] = start.toISOString()
         params['date<'] = end.toISOString()
       } else if (!historical) {
-        // Live: last 10 minutes
         params['date>'] = new Date(Date.now() - 600_000).toISOString()
       }
 
       const data = await openF1.location(params)
       if (!data.length) return
 
-      const raw: TrackPoint[] = data.filter((_, i) => i % 4 === 0).map(d => ({ x: d.x, y: d.y }))
+      const raw: TrackPoint[] = data.filter((_, i) => i % 2 === 0).map(d => ({ x: d.x, y: d.y }))
       const bounds = calcBounds(raw)
+      rawOutlineRef.current = raw
       boundsRef.current = bounds
       initDoneRef.current = true
 
-      setState(prev => ({ ...prev, outline: normalizePoints(raw, bounds), ready: true }))
+      setState(prev => ({
+        ...prev,
+        outline: normalizePoints(raw, bounds, containerWRef.current, containerHRef.current),
+        ready: true,
+      }))
     } catch { /* silent */ }
   }, [sessionKey, sessionDateStart, sessionDateEnd])
 
@@ -90,26 +118,24 @@ export function useTrackMap(
       const params: Parameters<typeof openF1.location>[0] = { session_key: sessionKey }
 
       if (historical && sessionDateEnd) {
-        // Final 15 seconds of the session = last-known positions
         const end = new Date(sessionDateEnd)
         const windowStart = new Date(end.getTime() - 15_000)
         params['date>'] = windowStart.toISOString()
         params['date<'] = end.toISOString()
       } else {
-        params['date>'] = new Date(Date.now() - 5000).toISOString()
+        params['date>'] = new Date(Date.now() - 10_000).toISOString()
       }
 
       const data = await openF1.location(params)
       if (!data.length) return
 
-      // Latest per driver
       const latestMap = data.reduce<Record<number, { x: number; y: number }>>((acc, d) => {
         acc[d.driver_number] = { x: d.x, y: d.y }
         return acc
       }, {})
 
       const livePositions: LivePosition[] = Object.entries(latestMap).map(([dn, pt]) => {
-        const [norm] = normalizePoints([pt], boundsRef.current!)
+        const [norm] = normalizePoints([pt], boundsRef.current!, containerWRef.current, containerHRef.current)
         return { driverNumber: Number(dn), ...norm }
       })
 
@@ -125,9 +151,8 @@ export function useTrackMap(
   useEffect(() => {
     if (!state.ready) return
     pollPositions()
-    // Historical: positions don't change, poll once and stop
     if (!isHistorical(sessionDateEnd)) {
-      pollRef.current = setInterval(pollPositions, 10_000)
+      pollRef.current = setInterval(pollPositions, 3_000)
       return () => { if (pollRef.current) clearInterval(pollRef.current) }
     }
   }, [state.ready, pollPositions, sessionDateEnd])

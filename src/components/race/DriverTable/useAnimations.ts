@@ -262,7 +262,6 @@ export function useAnimations({
       const pitInline = c.querySelector<HTMLElement>(
         `[data-pit-inline="${dn}"]`,
       );
-      const rail = c.querySelector<HTMLElement>(`[data-team-rail="${dn}"]`);
       const railPitIcon = c.querySelector<HTMLElement>(`[data-rail-pit="${dn}"]`);
       const railOutIcon = c.querySelector<HTMLElement>(`[data-rail-out="${dn}"]`);
 
@@ -359,7 +358,6 @@ export function useAnimations({
       const pitInline = c.querySelector<HTMLElement>(
         `[data-pit-inline="${dn}"]`,
       );
-      const rail = c.querySelector<HTMLElement>(`[data-team-rail="${dn}"]`);
       const railPitIcon = c.querySelector<HTMLElement>(`[data-rail-pit="${dn}"]`);
       const railOutIcon = c.querySelector<HTMLElement>(`[data-rail-out="${dn}"]`);
       // Single-target form: animates from current paused state — avoids snapping

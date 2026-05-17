@@ -78,7 +78,11 @@ export default function StandingsPanel({
         opacity: 0,
       }}
     >
+      {/* TODO: add skeleton/shimmer preload animation before DriverTable data arrives */}
+      {/* TODO: add row hover animation (subtle background highlight + scale) on each driver row */}
+
       {/* Panel header */}
+      {/* TODO: increase header font size from 9px to ~11px for readability */}
       <div
         className="shrink-0 flex items-center justify-between px-3 py-1.5"
         style={{

@@ -444,6 +444,7 @@ export function DriverRow({
                 letterSpacing: "0.08em",
                 lineHeight: 1,
                 marginTop: 1,
+                // TODO: increase team name opacity (currently 60% → try 90%) and bump font-size for visibility
                 color: `${teamColor}60`,
               }}
             >

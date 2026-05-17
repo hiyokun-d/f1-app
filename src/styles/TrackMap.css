@@ -1,5 +1,42 @@
-/* ── SVG driver pulse ring (selected driver on track map) ────────────────── */
-/* transform-box: fill-box required for SVG transforms to work correctly */
+/* ── Static circuit SVG art ─────────────────────────────────────────────── */
+.circuit-svg-art {
+  filter:
+    invert(1)
+    drop-shadow(0 0 6px rgba(255, 255, 255, 0.35))
+    drop-shadow(0 0 18px rgba(255, 255, 255, 0.15));
+  opacity: 0.55;
+}
+
+/* ── Loading overlay: scan line ─────────────────────────────────────────── */
+.track-scan-line {
+  position: absolute;
+  top: 0;
+  left: -20%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(232, 0, 45, 0.03) 40%,
+    rgba(232, 0, 45, 0.07) 50%,
+    rgba(232, 0, 45, 0.03) 60%,
+    transparent 100%
+  );
+  animation: track-scan 2.2s ease-in-out infinite;
+}
+
+@keyframes track-scan {
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(300%); }
+}
+
+/* ── Loading bar pulse ──────────────────────────────────────────────────── */
+@keyframes track-bar-pulse {
+  0%   { opacity: 0.25; transform: scaleY(0.6); }
+  100% { opacity: 1;    transform: scaleY(1); }
+}
+
+/* ── Driver pulse ring (selected driver on track map) ───────────────────── */
 .driver-pulse-ring {
   transform-box: fill-box;
   transform-origin: center;
@@ -9,4 +46,38 @@
 @keyframes driver-ring-pulse {
   0%   { transform: scale(1);   opacity: 0.9; }
   100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* ── Pit lane indicator ──────────────────────────────────────────────────── */
+.pit-pulse-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pit-ring-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pit-ring-pulse {
+  0%, 100% { transform: scale(1);   opacity: 0.9; }
+  50%       { transform: scale(1.6); opacity: 0.3; }
+}
+
+/* ── Incident / yellow flag ring ────────────────────────────────────────── */
+.incident-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: incident-ring-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes incident-ring-pulse {
+  0%   { opacity: 0.3; transform: scale(0.95); }
+  100% { opacity: 1;   transform: scale(1.05); }
+}
+
+/* ── Simulated data breathing border ────────────────────────────────────── */
+.sim-border-ring {
+  animation: sim-ring-breathe 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes sim-ring-breathe {
+  from { stroke-opacity: 0.25; }
+  to   { stroke-opacity: 0.85; }
 }

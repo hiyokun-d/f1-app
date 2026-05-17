@@ -62,11 +62,6 @@ function StartingLights({
 const REPO = "hiyokun-d/f1-app";
 const AUTHOR = "hiyokun-d";
 
-// Add a login here to get the badge pulse animation + click-delay transition.
-// The special popup card design is exclusive to AUTHOR.
-const SPECIAL_CONTRIBUTORS: Record<string, { badge: string; role: string }> = {
-  [AUTHOR]: { badge: "CREATOR", role: "RACE ENGINEER" },
-};
 
 interface Contributor {
   login: string;

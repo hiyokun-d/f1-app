@@ -170,7 +170,7 @@ export default function Race() {
     bufferEnd: carBufferEnd,
   } = useCarData(key, effectiveDriver, sessionDateEnd, replay.replayTime);
 
-  // ── Physics-based simulation fallback (fires when GPS data unavailable) ────
+  // ── Physics simulation — runs until real GPS positions arrive ─────────────
   const circuitHaystack = session
     ? `${session.circuit_short_name ?? ""} ${session.location ?? ""}`
     : "";
@@ -189,7 +189,7 @@ export default function Race() {
     filtered.laps.length > 0,
   );
 
-  // GPS positions take priority; simulation runs only when GPS is absent
+  // GPS positions take priority; simulation bridges the gap until GPS arrives
   const effectiveLivePositions = trackMap.livePositions.length > 0
     ? trackMap.livePositions
     : simulatedPositions;
@@ -358,7 +358,7 @@ export default function Race() {
         <div ref={centerRef} className="flex-1 relative min-w-0">
           <TrackMap
             outline={trackMap.outline}
-            livePositions={effectiveLivePositions}
+            livePositions={trackMap.livePositions}
             drivers={race.drivers}
             selectedDriver={effectiveDriver}
             onSelectDriver={setSelectedDriver}
@@ -369,7 +369,6 @@ export default function Race() {
             circuitSvgUrl={circuitSvgUrl}
             pits={filtered.pits}
             raceControl={filtered.raceControl}
-            isSimulated={useSimulation}
           />
 
           {/* Overtake banner sits on top of track map */}

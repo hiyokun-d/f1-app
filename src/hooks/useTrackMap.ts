@@ -61,6 +61,12 @@ export function useTrackMap(
   const driversRef = useRef<number[]>(driverNumbers)
   driversRef.current = driverNumbers
 
+  // Retry state for historical sessions with no GPS position data
+  const RETRY_WINDOWS = [15_000, 60_000, 300_000] as const
+  const retryIdxRef   = useRef(0)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollPosRef    = useRef<() => Promise<void>>(async () => {})
+
   // Re-normalize outline when container resizes
   const containerWRef = useRef(containerW)
   const containerHRef = useRef(containerH)
@@ -118,16 +124,27 @@ export function useTrackMap(
       const params: Parameters<typeof openF1.location>[0] = { session_key: sessionKey }
 
       if (historical && sessionDateEnd) {
+        const windowMs = RETRY_WINDOWS[retryIdxRef.current] ?? RETRY_WINDOWS[RETRY_WINDOWS.length - 1]
         const end = new Date(sessionDateEnd)
-        const windowStart = new Date(end.getTime() - 15_000)
-        params['date>'] = windowStart.toISOString()
+        params['date>'] = new Date(end.getTime() - windowMs).toISOString()
         params['date<'] = end.toISOString()
       } else {
         params['date>'] = new Date(Date.now() - 10_000).toISOString()
       }
 
       const data = await openF1.location(params)
-      if (!data.length) return
+      if (!data.length) {
+        // Historical: expand window and retry until data found or windows exhausted
+        if (historical && retryIdxRef.current < RETRY_WINDOWS.length - 1) {
+          retryIdxRef.current++
+          retryTimerRef.current = setTimeout(() => pollPosRef.current(), 2_000)
+        }
+        return
+      }
+
+      // Got data — clear retry state
+      if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null }
+      retryIdxRef.current = 0
 
       const latestMap = data.reduce<Record<number, { x: number; y: number }>>((acc, d) => {
         acc[d.driver_number] = { x: d.x, y: d.y }
@@ -142,6 +159,14 @@ export function useTrackMap(
       setState(prev => ({ ...prev, livePositions }))
     } catch { /* silent */ }
   }, [sessionKey, sessionDateEnd])
+
+  pollPosRef.current = pollPositions
+
+  // Reset retry index when session changes
+  useEffect(() => { retryIdxRef.current = 0 }, [sessionKey])
+
+  // Clean up retry timer on unmount
+  useEffect(() => () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current) }, [])
 
   useEffect(() => {
     if (!driverNumbers.length || initDoneRef.current) return

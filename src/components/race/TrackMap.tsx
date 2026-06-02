@@ -19,21 +19,16 @@ interface Props {
   circuitSvgUrl: string | null
   pits?: Pit[]
   raceControl?: RaceControl[]
-  /** True when positions come from the physics simulation (not real GPS) */
-  isSimulated?: boolean
 }
 
 const MIN_ZOOM = 1
 const MAX_ZOOM = 5
 const ZOOM_STEP = 0.2
 
-// Simulation updates at 50ms → 80ms transition keeps motion fluid
-const SIM_TRANSITION = 'transform 80ms linear'
-
 export default memo(function TrackMap({
   outline, livePositions, drivers, selectedDriver,
   onSelectDriver, sessionName, ready, containerW, containerH,
-  circuitSvgUrl, pits, raceControl, isSimulated,
+  circuitSvgUrl, pits, raceControl,
 }: Props) {
   const driverMap = new Map(drivers.map(d => [d.driver_number, d]))
 
@@ -47,6 +42,53 @@ export default memo(function TrackMap({
   outlineRef.current = outline
   arcDataRef.current = arcData
 
+  // ── Circuit SVG inline data ───────────────────────────────────────────────
+  const [circuitSvgData, setCircuitSvgData] = useState<{ paths: string[]; vbW: number; vbH: number } | null>(null)
+
+  useEffect(() => {
+    if (!circuitSvgUrl) { setCircuitSvgData(null); return }
+    let cancelled = false
+    fetch(circuitSvgUrl)
+      .then(r => r.text())
+      .then(text => {
+        if (cancelled) return
+        const vbMatch = text.match(/viewBox="([^"]+)"/)
+        if (!vbMatch) return
+        const parts = vbMatch[1].trim().split(/\s+/).map(Number)
+        const vbW = parts[2], vbH = parts[3]
+        if (!vbW || !vbH) return
+        const dMatches = text.match(/\bd="([^"]+)"/g) ?? []
+        const paths = dMatches.map(m => m.slice(3, -1))
+        setCircuitSvgData({ paths, vbW, vbH })
+        setSvgLoaded(true)
+      })
+      .catch(() => { if (!cancelled) setSvgLoaded(true) })
+    return () => { cancelled = true }
+  }, [circuitSvgUrl])
+
+  const gpsBB = useMemo(() => {
+    if (!outline.length) return null
+    return {
+      minX: Math.min(...outline.map(p => p.x)),
+      maxX: Math.max(...outline.map(p => p.x)),
+      minY: Math.min(...outline.map(p => p.y)),
+      maxY: Math.max(...outline.map(p => p.y)),
+    }
+  }, [outline])
+
+  const circuitTransform = useMemo(() => {
+    if (!circuitSvgData) return null
+    const { vbW, vbH } = circuitSvgData
+    if (gpsBB) {
+      const sx = (gpsBB.maxX - gpsBB.minX) / vbW
+      const sy = (gpsBB.maxY - gpsBB.minY) / vbH
+      return `translate(${gpsBB.minX}, ${gpsBB.minY}) scale(${sx}, ${sy})`
+    }
+    const pad = 40
+    const s = Math.min((containerW - pad * 2) / vbW, (containerH - pad * 2) / vbH)
+    return `translate(${(containerW - vbW * s) / 2}, ${(containerH - vbH * s) / 2}) scale(${s})`
+  }, [circuitSvgData, gpsBB, containerW, containerH])
+
   // ── GPS arc-following animation state ─────────────────────────────────────
   // Each driver has a proxy object {frac} that AnimeJS animates monotonically.
   // posAtFraction handles the mod-1 wrapping each frame.
@@ -57,7 +99,7 @@ export default memo(function TrackMap({
 
   // When real GPS positions update: animate each driver along the track arc
   useEffect(() => {
-    if (isSimulated || !arcData || !outline.length) return
+    if (!arcData || !outline.length) return
 
     for (const lp of livePositions) {
       const el = driverGEls.current.get(lp.driverNumber)
@@ -105,7 +147,7 @@ export default memo(function TrackMap({
       driverAnims.current.set(lp.driverNumber, anim)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [livePositions, isSimulated])
+  }, [livePositions])
 
   // Cleanup animations when outline changes (arc fractions no longer valid)
   useEffect(() => {
@@ -218,13 +260,14 @@ export default memo(function TrackMap({
   }, [zoom, clampPan])
 
   // ── Preload reveal ────────────────────────────────────────────────────────
+  // svgLoaded is set by the fetch effect above (or starts true when no circuit SVG)
   const [svgLoaded, setSvgLoaded] = useState(!circuitSvgUrl)
   const isFullyReady = ready && svgLoaded
   const revealedRef  = useRef(false)
   const overlayRef   = useRef<HTMLDivElement>(null)
   const contentRef   = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { setSvgLoaded(!circuitSvgUrl); revealedRef.current = false }, [circuitSvgUrl])
+  useEffect(() => { if (!circuitSvgUrl) setSvgLoaded(true); revealedRef.current = false }, [circuitSvgUrl])
 
   useEffect(() => {
     if (!isFullyReady || revealedRef.current) return
@@ -298,20 +341,6 @@ export default memo(function TrackMap({
           zIndex: 2,
         }} />
 
-        {/* Simulation mode indicator */}
-        {isSimulated && livePositions.length > 0 && (
-          <div className="absolute top-3 right-3 pointer-events-none" style={{ zIndex: 5 }}>
-            <div style={{
-              padding: '2px 8px', background: 'rgba(139,92,246,0.12)',
-              border: '1px solid rgba(139,92,246,0.3)', backdropFilter: 'blur(6px)',
-            }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'rgba(139,92,246,0.8)', letterSpacing: '0.15em' }}>
-                SIM
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* SC / Red flag badge */}
         {(hasActiveSC || hasRedFlag) && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none" style={{ zIndex: 5 }}>
@@ -336,20 +365,7 @@ export default memo(function TrackMap({
           transform, transformOrigin: 'center center',
           willChange: 'transform', transition: transformTransition, zIndex: 1,
         }}>
-          {/* Circuit SVG art — primary track reference when available */}
-          {circuitSvgUrl && (
-            <img
-              src={circuitSvgUrl}
-              className="absolute inset-0 w-full h-full pointer-events-none circuit-svg-art"
-              style={{ objectFit: 'contain', opacity: 0.55 }}
-              onLoad={() => setSvgLoaded(true)}
-              aria-hidden
-            />
-          )}
-
-          {/* GPS track outline + driver dots SVG.
-              GPS polyline only rendered when no circuit SVG art (fallback).
-              Driver dots always rendered here, positioned in GPS coordinate space. */}
+          {/* Track + driver dots — single unified SVG layer */}
           <svg
             viewBox={`0 0 ${containerW} ${containerH}`}
             className="absolute inset-0 w-full h-full"
@@ -362,17 +378,30 @@ export default memo(function TrackMap({
               </filter>
             </defs>
 
-            {/* GPS fallback track surface — only shown when no circuit SVG art */}
+            {/* Circuit SVG paths — mapped into GPS coordinate space via transform */}
+            {circuitSvgData && circuitTransform && circuitSvgData.paths.map((d, i) => (
+              <g key={i} transform={circuitTransform}>
+                <path d={d} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="30"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="#191d28" strokeWidth="17"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="#22273a" strokeWidth="13"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="13"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5"
+                  strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 13"
+                  vectorEffect="non-scaling-stroke" />
+              </g>
+            ))}
+
+            {/* GPS polyline fallback — only when no /tracks/ SVG for this circuit */}
             {outline.length > 1 && !circuitSvgUrl && (
               <g>
-                {/* Shadow base */}
                 <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Asphalt */}
                 <polyline points={pts} fill="none" stroke="#191d28" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
                 <polyline points={pts} fill="none" stroke="#22273a" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Edge highlight */}
                 <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Centre-line dashes */}
                 <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.2"
                   strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 13" />
               </g>
@@ -392,11 +421,7 @@ export default memo(function TrackMap({
               const dotR  = isPitting ? 4 : isSelected ? 9 : 5.5
               const label = isPitting ? 'PIT' : (driver?.name_acronym ?? String(lp.driverNumber))
 
-              // GPS mode: AnimeJS animates the transform via driverGEls ref.
-              // Simulation mode: React controls transform + CSS 80ms transition.
-              const gStyle = isSimulated
-                ? { transform: `translate(${lp.x}px, ${lp.y}px)`, transition: SIM_TRANSITION, willChange: 'transform' as const }
-                : { willChange: 'transform' as const }
+              const gStyle = { willChange: 'transform' as const }
 
               return (
                 <g
@@ -405,7 +430,7 @@ export default memo(function TrackMap({
                     if (el) {
                       driverGEls.current.set(lp.driverNumber, el)
                       // Initial GPS position set directly (no React style, prevents flash at 0,0)
-                      if (!isSimulated && !driverProxies.current.has(lp.driverNumber)) {
+                      if (!driverProxies.current.has(lp.driverNumber)) {
                         const arc = arcDataRef.current
                         const ol  = outlineRef.current
                         if (arc && ol.length) {
@@ -435,9 +460,9 @@ export default memo(function TrackMap({
                   {/* Selected driver rings */}
                   {isSelected && (
                     <>
-                      <circle r="13" fill="none" stroke={isSimulated ? '#8b5cf6' : fillColor}
+                      <circle r="13" fill="none" stroke={fillColor}
                         strokeWidth="1.5" className="driver-pulse-ring" />
-                      <circle r="11" fill="none" stroke={isSimulated ? '#8b5cf6' : fillColor}
+                      <circle r="11" fill="none" stroke={fillColor}
                         strokeWidth="0.8" opacity="0.5" />
                     </>
                   )}
@@ -445,18 +470,11 @@ export default memo(function TrackMap({
                   {/* Pit pulse ring */}
                   {isPitting && <circle r="8" fill="none" stroke="#f59e0b" strokeWidth="1.5" className="pit-pulse-ring" />}
 
-                  {/* Simulation breathing border (non-selected) */}
-                  {isSimulated && !isSelected && (
-                    <circle r={dotR + 3} fill="none" stroke="#8b5cf6" strokeWidth="1" className="sim-border-ring" />
-                  )}
-
                   {/* Main dot */}
                   <circle
                     r={dotR}
                     fill={fillColor}
-                    stroke={isSelected
-                      ? (isSimulated ? '#8b5cf6' : 'rgba(255,255,255,0.95)')
-                      : 'rgba(0,0,0,0.45)'}
+                    stroke={isSelected ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.45)'}
                     strokeWidth={isSelected ? 2 : 0.8}
                     filter={isSelected ? 'url(#glow-dot)' : undefined}
                     style={{ transition: 'r 0.3s ease' }}

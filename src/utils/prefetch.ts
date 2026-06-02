@@ -46,6 +46,16 @@ export async function prefetchRaceData(sessionKey: number): Promise<void> {
   openF1.teamRadio(params).catch(noop)
   openF1.weather(params).catch(noop)
 
+  // Prefetch last-15s GPS positions so useTrackMap.pollPositions is a cache hit
+  if (historical && session?.date_end) {
+    const posEnd = new Date(session.date_end)
+    openF1.location({
+      session_key: sessionKey,
+      'date>': new Date(posEnd.getTime() - 15_000).toISOString(),
+      'date<': posEnd.toISOString(),
+    }).catch(noop)
+  }
+
   // ── Track location prefetch ───────────────────────────────────────────────
   if (session?.date_start) {
     const locationParams: Parameters<typeof openF1.location>[0] = {

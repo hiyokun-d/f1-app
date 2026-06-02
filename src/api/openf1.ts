@@ -9,7 +9,6 @@ const api = axios.create({
   baseURL: 'https://api.openf1.org/v1',
   timeout: 20000,
   paramsSerializer: {
-    // Keep > and < literal in keys (OpenF1 uses e.g. date>2024-01-01, not date%3E...)
     serialize: (params: Record<string, unknown>) =>
       Object.entries(params)
         .filter(([, v]) => v !== undefined && v !== null)
@@ -32,9 +31,7 @@ api.interceptors.response.use(
   }
 )
 
-// ── Response cache (60s TTL) ──────────────────────────────────────────
-// Prevents React Strict Mode double-mounts and back-navigation from
-// re-hitting the 30 req/min limit with duplicate requests.
+// ── Response cache (60s TTL for live; Infinity for historical) ────────
 const CACHE = new Map<string, { data: unknown[]; expiry: number }>()
 const CACHE_TTL = 60_000
 
@@ -42,11 +39,25 @@ function cacheKey(path: string, params?: Record<string, unknown>) {
   return `${path}|${params ? JSON.stringify(params) : ''}`
 }
 
-// ── Global serial request queue ───────────────────────────────────────
-// 30 req/min = ~2s/req budget. We use 800ms gap — fast enough to load
-// 12 requests in ~10s, slow enough to stay comfortably under the limit.
-const QUEUE_GAP = 800
+/**
+ * After fetching historical session data, mark all cached entries for
+ * that session as permanent (Infinity TTL) — historical data never changes.
+ */
+export function markSessionCachePermanent(sessionKey: number) {
+  const needle = `session_key":${sessionKey}`
+  for (const [key, entry] of CACHE.entries()) {
+    if (key.includes(needle)) entry.expiry = Infinity
+  }
+}
 
+// ── In-flight dedup ───────────────────────────────────────────────────
+// If prefetch and a hook both call the same endpoint before the first
+// request resolves, they share one promise → one actual API call.
+const INFLIGHT = new Map<string, Promise<unknown[]>>()
+
+// ── Global serial request queue ───────────────────────────────────────
+// 30 req/min = ~2s/req budget. 800ms gap keeps us well under the limit.
+const QUEUE_GAP = 800
 const queue: Array<() => void> = []
 let draining = false
 
@@ -69,17 +80,32 @@ const get = <T>(path: string, params?: Record<string, unknown>): Promise<T[]> =>
   const key = cacheKey(path, params)
   const cached = CACHE.get(key)
   if (cached && cached.expiry > Date.now()) return Promise.resolve(cached.data as T[])
-  return enqueue(async () => {
+
+  // Return existing in-flight promise instead of enqueuing a duplicate request
+  const inflight = INFLIGHT.get(key)
+  if (inflight) return inflight as Promise<T[]>
+
+  const promise = enqueue(async () => {
+    // Re-check cache in case it was populated while we waited in the queue
+    const hit = CACHE.get(key)
+    if (hit && hit.expiry > Date.now()) return hit.data as T[]
     try {
       const { data } = await api.get<T[]>(path, { params })
       CACHE.set(key, { data, expiry: Date.now() + CACHE_TTL })
       return data
     } catch (err) {
-      // OpenF1 returns 404 when a query matches no records — treat as empty
-      if (axios.isAxiosError(err) && err.response?.status === 404) return []
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        CACHE.set(key, { data: [], expiry: Date.now() + CACHE_TTL })
+        return []
+      }
       throw err
     }
+  }).finally(() => {
+    INFLIGHT.delete(key)
   })
+
+  INFLIGHT.set(key, promise as Promise<unknown[]>)
+  return promise
 }
 
 // ── Endpoints ─────────────────────────────────────────────────────────

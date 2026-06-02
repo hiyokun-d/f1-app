@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useRaceData } from "../hooks/useRaceData";
 import { useCarData } from "../hooks/useCarData";
@@ -7,6 +7,9 @@ import { useRaceReplay } from "../hooks/useRaceReplay";
 import { useSession } from "../hooks/useSession";
 import { useReplayFilter } from "../hooks/useReplayFilter";
 import { useDriverTelemetryPrefetch } from "../hooks/useDriverTelemetryPrefetch";
+import { useSimulatedPositions } from "../hooks/useSimulatedPositions";
+import { useSvgOutline } from "../hooks/useSvgOutline";
+import { getCircuitSvgUrl } from "../utils/circuitSvg";
 import type { OvertakeEvent } from "../types";
 
 import Header from "../components/race/Header";
@@ -17,15 +20,108 @@ import TelemetryPanel from "../components/race/TelemetryPanel";
 import RcTicker from "../components/race/RcTicker";
 import OvertakeBanner from "../components/race/OvertakeBanner";
 
+// Snap the right panel: below this px → collapse to 0
+const RIGHT_SNAP_THRESHOLD = 120
+
+// ── Collapsed right panel: arrow tab that opens on click OR leftward drag ──
+function RightPanelTab({ onOpen, onWidthChange }: {
+  onOpen: () => void
+  onWidthChange: (w: number) => void
+}) {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    let lastX = startX
+
+    // TODO: change cursor to ew-resize (or a custom "drag left" cursor) during drag
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMove = (ev: MouseEvent) => { lastX = ev.clientX }
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      const dragged = startX - lastX  // positive = dragged left = expanding panel
+      if (dragged > 20) {
+        onWidthChange(Math.min(500, Math.max(200, dragged)))
+      } else {
+        onOpen()
+      }
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [onOpen, onWidthChange])
+
+  return (
+    <div
+      onMouseDown={handleMouseDown}
+      className="shrink-0 flex flex-col items-center justify-center gap-2 cursor-col-resize group select-none"
+      style={{
+        width: 20,
+        background: 'rgba(5,6,9,0.92)',
+        borderLeft: '1px solid rgba(255,255,255,0.07)',
+      }}
+      title="Drag left or click to open telemetry"
+    >
+      {/* Arrow ‹ */}
+      <span
+        className="transition-colors duration-150"
+        style={{
+          color: 'rgba(255,255,255,0.2)',
+          fontSize: 18,
+          lineHeight: 1,
+          fontWeight: 300,
+        }}
+      >‹</span>
+      {/* Decorative vertical line */}
+      <div style={{
+        width: 1,
+        height: 32,
+        background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.08), transparent)',
+      }} />
+    </div>
+  )
+}
+
 export default function Race() {
   const { sessionKey } = useParams<{ sessionKey: string }>();
   const key = Number(sessionKey);
 
   if (!key || isNaN(key)) return <Navigate to="/" replace />;
 
-  // ── Panel widths (resizable) ─────────────────────────────────────────────
+  // ── Panel widths ─────────────────────────────────────────────────────────
   const [leftW, setLeftW] = useState(260);
   const [rightW, setRightW] = useState(290);
+  // rightVisible drives show/hide; rightW remembers the last expanded width
+  const [rightVisible, setRightVisible] = useState(true);
+
+  const handleRightResize = useCallback((w: number) => {
+    if (w < RIGHT_SNAP_THRESHOLD) {
+      setRightVisible(false);
+    } else {
+      setRightW(w);
+      setRightVisible(true);
+    }
+  }, []);
+
+  // ── Center container size (drives track map coordinate space) ───────────
+  const centerRef = useRef<HTMLDivElement>(null);
+  const [centerSize, setCenterSize] = useState({ w: 800, h: 600 });
+
+  useEffect(() => {
+    const el = centerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) setCenterSize({ w: Math.round(width), h: Math.round(height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Session + data hooks ─────────────────────────────────────────────────
   const session = useSession(key);
@@ -51,22 +147,60 @@ export default function Race() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [race.drivers.map((d) => d.driver_number).join(",")],
   );
+  // ── Selected driver (moved before useTrackMap so it can drive racing line) ─
+  const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
+  const effectiveDriver =
+    selectedDriver ?? race.positions[0]?.driver_number ?? null;
+
   const trackMap = useTrackMap(
     key,
     driverNumbers,
     sessionDateStart,
     sessionDateEnd,
+    centerSize.w,
+    centerSize.h,
   );
 
-  // ── Selected driver + car data ───────────────────────────────────────────
-  const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
-  const effectiveDriver =
-    selectedDriver ?? race.positions[0]?.driver_number ?? null;
+  // Auto-reveal right panel when user explicitly selects a driver
+  useEffect(() => {
+    if (selectedDriver !== null && !rightVisible) setRightVisible(true);
+  }, [selectedDriver, rightVisible]);
   const {
     latest: carLatest,
     history: carHistory,
     bufferEnd: carBufferEnd,
   } = useCarData(key, effectiveDriver, sessionDateEnd, replay.replayTime);
+
+  // ── SVG outline — shared by simulation + TrackMap ────────────────────────
+  const circuitSvgUrl = session
+    ? getCircuitSvgUrl(session.circuit_short_name ?? "", session.location ?? "")
+    : null;
+  const svgOutline = useSvgOutline(circuitSvgUrl, trackMap.outline);
+  const simOutline = svgOutline.length > 0 ? svgOutline : trackMap.outline;
+
+  // ── Physics simulation — runs until real GPS positions arrive ─────────────
+  const circuitHaystack = session
+    ? `${session.circuit_short_name ?? ""} ${session.location ?? ""}`
+    : "";
+  const useSimulation = trackMap.ready && trackMap.livePositions.length === 0;
+  const simulatedPositions = useSimulatedPositions(
+    simOutline,
+    filtered.positions,
+    filtered.intervals,
+    filtered.laps,
+    filtered.stints,
+    filtered.pits,
+    carLatest,
+    effectiveDriver,
+    circuitHaystack,
+    useSimulation,
+    filtered.laps.length > 0,
+  );
+
+  // GPS positions take priority; simulation bridges the gap until GPS arrives
+  const effectiveLivePositions = trackMap.livePositions.length > 0
+    ? trackMap.livePositions
+    : simulatedPositions;
 
   useDriverTelemetryPrefetch(
     key,
@@ -98,120 +232,72 @@ export default function Race() {
       s2: number | null = null,
       s3: number | null = null;
     for (const l of filtered.laps) {
-      if (
-        l.duration_sector_1 !== null &&
-        (s1 === null || l.duration_sector_1 < s1)
-      )
-        s1 = l.duration_sector_1;
-      if (
-        l.duration_sector_2 !== null &&
-        (s2 === null || l.duration_sector_2 < s2)
-      )
-        s2 = l.duration_sector_2;
-      if (
-        l.duration_sector_3 !== null &&
-        (s3 === null || l.duration_sector_3 < s3)
-      )
-        s3 = l.duration_sector_3;
+      if (l.duration_sector_1 !== null && (s1 === null || l.duration_sector_1 < s1)) s1 = l.duration_sector_1;
+      if (l.duration_sector_2 !== null && (s2 === null || l.duration_sector_2 < s2)) s2 = l.duration_sector_2;
+      if (l.duration_sector_3 !== null && (s3 === null || l.duration_sector_3 < s3)) s3 = l.duration_sector_3;
     }
     return { s1, s2, s3 };
   }, [filtered.laps]);
 
   const bannerOvertakingDriver = activeBannerOvertake
-    ? race.drivers.find(
-        (d) => d.driver_number === activeBannerOvertake.overtakingDriver,
-      )
+    ? race.drivers.find((d) => d.driver_number === activeBannerOvertake.overtakingDriver)
     : null;
   const bannerOvertakenDriver = activeBannerOvertake
-    ? race.drivers.find(
-        (d) => d.driver_number === activeBannerOvertake.overtakenDriver,
-      )
+    ? race.drivers.find((d) => d.driver_number === activeBannerOvertake.overtakenDriver)
     : null;
 
-  const selectedDriverObj = race.drivers.find(
-    (d) => d.driver_number === effectiveDriver,
-  );
+  const selectedDriverObj = race.drivers.find((d) => d.driver_number === effectiveDriver);
 
   const selectedStint = useMemo(() => {
     if (!effectiveDriver) return undefined;
     return filtered.stints
       .filter((s) => s.driver_number === effectiveDriver)
-      .reduce<
-        (typeof race.stints)[0] | undefined
-      >((best, s) => (!best || s.stint_number > best.stint_number ? s : best), undefined);
+      .reduce<(typeof race.stints)[0] | undefined>(
+        (best, s) => (!best || s.stint_number > best.stint_number ? s : best),
+        undefined,
+      );
   }, [filtered.stints, effectiveDriver]);
 
   const selectedLastLap = useMemo(() => {
     if (!effectiveDriver) return undefined;
     return filtered.laps
       .filter((l) => l.driver_number === effectiveDriver)
-      .reduce<
-        (typeof race.laps)[0] | undefined
-      >((best, l) => (!best || l.lap_number > best.lap_number ? l : best), undefined);
+      .reduce<(typeof race.laps)[0] | undefined>(
+        (best, l) => (!best || l.lap_number > best.lap_number ? l : best),
+        undefined,
+      );
   }, [filtered.laps, effectiveDriver]);
 
   const sessionName = session
     ? `${session.country_name} — ${session.session_name}`
     : `Session ${key}`;
   const sessionType = session?.session_type ?? "";
-  const sessionLocation =
-    session?.circuit_short_name ?? session?.location ?? "";
-
+  const sessionLocation = session?.circuit_short_name ?? session?.location ?? "";
   // ── Loading / error states ───────────────────────────────────────────────
   if (race.loading) {
     return (
-      <div
-        className="h-screen flex flex-col items-center justify-center"
-        style={{ background: "#06070a" }}
-      >
+      <div className="h-screen flex flex-col items-center justify-center" style={{ background: "#06070a" }}>
         <div className="relative w-72 h-32 border-b border-l border-[#1a1a24] overflow-hidden">
           <div
             className="absolute inset-0 opacity-20"
             style={{
-              backgroundImage:
-                "linear-gradient(to right, #1a1a24 1px, transparent 1px), linear-gradient(to bottom, #1a1a24 1px, transparent 1px)",
+              backgroundImage: "linear-gradient(to right, #1a1a24 1px, transparent 1px), linear-gradient(to bottom, #1a1a24 1px, transparent 1px)",
               backgroundSize: "12px 12px",
             }}
           />
-          <svg
-            className="absolute w-full h-full opacity-40"
-            viewBox="0 0 100 50"
-            preserveAspectRatio="none"
-          >
-            <path
-              d="M0,40 C10,40 15,10 25,10 C35,10 40,30 50,30 C60,30 65,5 75,5 C85,5 90,35 100,35"
-              fill="none"
-              stroke="#ffffff"
-              strokeWidth="0.5"
-            />
-            <path
-              d="M0,45 L15,45 L15,35 L30,35 L30,25 L50,25 L50,40 L70,40 L70,20 L100,20"
-              fill="none"
-              stroke="#e8002d"
-              strokeWidth="0.5"
-            />
+          <svg className="absolute w-full h-full opacity-40" viewBox="0 0 100 50" preserveAspectRatio="none">
+            <path d="M0,40 C10,40 15,10 25,10 C35,10 40,30 50,30 C60,30 65,5 75,5 C85,5 90,35 100,35" fill="none" stroke="#ffffff" strokeWidth="0.5" />
+            <path d="M0,45 L15,45 L15,35 L30,35 L30,25 L50,25 L50,40 L70,40 L70,20 L100,20" fill="none" stroke="#e8002d" strokeWidth="0.5" />
           </svg>
           <div className="absolute top-0 bottom-0 left-0 w-[2px] bg-[#B15BE0] shadow-[0_0_12px_#B15BE0] animate-scan-load z-10" />
         </div>
-
-        <div
-          className="mt-4 flex w-72 justify-between"
-          style={{
-            fontFamily: "var(--font-data)",
-            fontSize: 10,
-            letterSpacing: "0.05em",
-          }}
-        >
+        <div className="mt-4 flex w-72 justify-between" style={{ fontFamily: "var(--font-data)", fontSize: 10, letterSpacing: "0.05em" }}>
           <div className="flex flex-col text-left gap-1">
-            <span className="text-[#00D2FF] font-bold">
-              RX: RECEIVING PACKETS
-            </span>
+            <span className="text-[#00D2FF] font-bold">RX: RECEIVING PACKETS</span>
             <span className="text-[#4b5563]">OPENF1 API SYNC</span>
           </div>
           <div className="flex flex-col text-right gap-1">
-            <span className="text-[#e8002d] animate-pulse">
-              AWAITING TELEMETRY
-            </span>
+            <span className="text-[#e8002d] animate-pulse">AWAITING TELEMETRY</span>
             <span className="text-[#4b5563]">SESSION {key}</span>
           </div>
         </div>
@@ -221,39 +307,15 @@ export default function Race() {
 
   if (race.error && !race.drivers.length) {
     return (
-      <div
-        className="h-screen flex flex-col items-center justify-center gap-4"
-        style={{ background: "#06070a" }}
-      >
+      <div className="h-screen flex flex-col items-center justify-center gap-4" style={{ background: "#06070a" }}>
         <span className="text-[#e8002d] text-sm font-mono">{race.error}</span>
-        <Link
-          to="/"
-          viewTransition
-          className="text-[#4b5563] text-xs underline"
-        >
-          ← Back
-        </Link>
+        <Link to="/" viewTransition className="text-[#4b5563] text-xs underline">← Back</Link>
       </div>
     );
   }
 
   return (
-    <div
-      className="h-screen flex flex-col overflow-hidden relative"
-      style={{ background: "#06070a" }}
-    >
-      {/* Background: full-screen track map */}
-      <div className="absolute inset-0 z-0">
-        <TrackMap
-          outline={trackMap.outline}
-          livePositions={trackMap.livePositions}
-          drivers={race.drivers}
-          selectedDriver={effectiveDriver}
-          onSelectDriver={setSelectedDriver}
-          sessionName={sessionName}
-          ready={trackMap.ready}
-        />
-      </div>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: "#06070a" }}>
 
       {/* Header */}
       <div className="relative z-30 shrink-0">
@@ -272,8 +334,9 @@ export default function Race() {
         />
       </div>
 
-      {/* Main row: panels flanking the track map */}
-      <div className="relative z-20 flex flex-1 min-h-0">
+      {/* Main row */}
+      <div className="flex flex-1 min-h-0 relative z-20">
+
         {/* Left: Standings */}
         <StandingsPanel
           width={leftW}
@@ -295,36 +358,65 @@ export default function Race() {
           totalLaps={race.totalLaps}
         />
 
-        {/* Center spacer — track map shows through */}
-        <div className="flex-1 relative">
-          {activeBannerOvertake &&
-            bannerOvertakingDriver &&
-            bannerOvertakenDriver && (
+        {/* Center: Track map fills the space between panels */}
+        <div ref={centerRef} className="flex-1 relative min-w-0">
+          <TrackMap
+            outline={trackMap.outline}
+            svgOutline={svgOutline}
+            livePositions={effectiveLivePositions}
+            drivers={race.drivers}
+            selectedDriver={effectiveDriver}
+            onSelectDriver={setSelectedDriver}
+            sessionName={sessionName}
+            ready={trackMap.ready}
+            containerW={centerSize.w}
+            containerH={centerSize.h}
+            circuitSvgUrl={circuitSvgUrl}
+            pits={filtered.pits}
+            raceControl={filtered.raceControl}
+            isSimulated={useSimulation}
+            racingLines={trackMap.racingLines}
+          />
+
+          {/* Overtake banner sits on top of track map */}
+          {activeBannerOvertake && bannerOvertakingDriver && bannerOvertakenDriver && (
+            <div className="absolute inset-x-0 top-0 z-10 pointer-events-none">
               <OvertakeBanner
                 overtake={activeBannerOvertake}
                 overtakingDriver={bannerOvertakingDriver}
                 overtakenDriver={bannerOvertakenDriver}
                 onDismiss={() => setActiveBannerOvertake(null)}
               />
-            )}
+            </div>
+          )}
         </div>
 
-        {/* Right: Telemetry + Radio */}
-        <TelemetryPanel
-          width={rightW}
-          onWidthChange={setRightW}
-          driver={selectedDriverObj}
-          latest={carLatest}
-          history={carHistory}
-          lastLap={selectedLastLap}
-          currentStint={selectedStint}
-          radio={filtered.teamRadio}
-          drivers={race.drivers}
-          selectedDriver={effectiveDriver}
-        />
+        {/* Right: Telemetry + Radio (collapsible) */}
+        {rightVisible && (
+          <TelemetryPanel
+            width={rightW}
+            onWidthChange={handleRightResize}
+            driver={selectedDriverObj}
+            latest={carLatest}
+            history={carHistory}
+            lastLap={selectedLastLap}
+            currentStint={selectedStint}
+            radio={filtered.teamRadio}
+            drivers={race.drivers}
+            selectedDriver={effectiveDriver}
+          />
+        )}
+
+        {/* Arrow tab — click or drag left to open panel */}
+        {!rightVisible && (
+          <RightPanelTab
+            onOpen={() => setRightVisible(true)}
+            onWidthChange={(w) => { setRightW(w); setRightVisible(true) }}
+          />
+        )}
       </div>
 
-      {/* Bottom bar: RC ticker + replay controls */}
+      {/* Bottom bar */}
       <div className="relative z-30 shrink-0">
         <RcTicker messages={filtered.raceControl} />
         <ReplayControls {...replay} bufferProgress={bufferProgress} />

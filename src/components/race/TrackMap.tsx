@@ -1,379 +1,630 @@
 import "../../styles/TrackMap.css";
-import { memo } from "react";
-import type { Driver } from "../../types";
-import type { TrackPoint, LivePosition } from "../../hooks/useTrackMap";
-import { SVG_W, SVG_H } from "../../hooks/useTrackMap";
-import { teamHex } from "../../utils/format";
-
-const SINGAPORE_PATH =
-  "m791.8 7.5007c-2.7435 0.036122-5.6028 1.2785-9.0274 3.5469-7.5862 5.0249-9.1617 10.044-10.9 34.719-2.3657 33.574-2.3604 33.609 17.818 97.752 17.455 55.484 20.43 91.368 8.6602 104.46-12.416 13.81-16.25 14.216-94.637 10.027-10.02-0.54-48.59-2.55-85.71-4.48-83.415-4.3297-79.842-4.0301-95.262-8.0293-25.008-6.486-42.472-16.45-172.72-98.545-28.216-17.784-34.614-18.317-42.611-3.5547-1.5254 2.8157-8.6803 15.469-15.9 28.119-7.22 12.65-18.724 33.739-25.564 46.865-18.82 36.115-11.012 38.713-77.938-25.922-22.612-21.838-29.195-24.703-44.594-19.414-0.25968 0.0892-0.48898 0.17701-0.74219 0.26562-1.0048 0.29088-2.0109 0.65321-3.0176 1.1133-0.0139 0.008-0.0271 0.0172-0.041 0.0254-13.393 5.293-18.208 12.812-44.65 62.443-12.783 23.993-36.17 66.123-51.971 93.623-37.559 65.33-35.085 60.19-35.314 73.34l-0.18555 10.654 4.6836 7.5273c5.2719 8.4716 7.294 10.265 24.633 21.859 12.937 8.651 19.728 12.107 23.787 12.107 3.2593 0 4.0198 2.1817 5.3965 15.5 3.7093 35.883 4.5412 37.564 29.266 59.174 6.1792 5.4008 11.684 10.301 12.234 10.889 0.55 0.58762 5.3283 4.7644 10.619 9.2832 11.839 10.112 14.53 13.286 29.369 34.654 15.219 21.916 14.677 21.203 17.012 22.367 6.0713 3.0261 10.398-0.64515 13.395-11.367 1.0661-3.8149 13.967-75.437 21.615-120 20.276-118.14 35.299-189.12 43.18-204 7.7524-14.637 13.512-12.666 41.811 14.309 43.81 41.761 92.519 76.914 111.21 80.262 19.456 3.4844 25.736 5.1091 29.463 7.6211 4.3916 2.9604 3.9275 1.8686 9.2773 21.852 9.0477 33.796 6.9638 32.853 84.047 37.984l53 3.5293 6.1426-2.5957c8.1607-3.4474 9.7622-6.6614 15.404-30.92 6.3022-27.097 4.4331-26.12 44.723-23.389 41.077 2.7844 44.156 4.6191 44.213 26.348 0.0585 22.301 14.838 30.508 57.559 31.965 10.428 0.35572 25.709 1.0404 33.959 1.5215 112.24 6.5453 105.87 7.8395 124.84-25.371 18.631-32.619 18.522-22.916 1.5625-139.51-10.03-68.93-21.65-166.6-24.51-205.99-1.4-19.239-7.82-27.04-21.08-25.619-15.76 1.688-33.13-7.105-44.93-22.752-7.54-9.989-12.36-14.317-17.59-14.248z";
+import { memo, useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { animate } from 'animejs'
+import type { Driver, Pit, RaceControl } from '../../types'
+import type { TrackPoint, LivePosition } from '../../hooks/useTrackMap'
+import { buildArcData, posAtFraction, projectToTrack, type ArcData } from '../../utils/trackPhysics'
+import { teamHex } from '../../utils/format'
 
 interface Props {
-  outline: TrackPoint[];
-  livePositions: LivePosition[];
-  drivers: Driver[];
-  selectedDriver: number | null;
-  onSelectDriver: (dn: number) => void;
-  sessionName: string;
-  ready: boolean;
+  outline: TrackPoint[]
+  livePositions: LivePosition[]
+  drivers: Driver[]
+  selectedDriver: number | null
+  onSelectDriver: (dn: number) => void
+  sessionName: string
+  ready: boolean
+  containerW: number
+  containerH: number
+  circuitSvgUrl: string | null
+  /** Pre-sampled SVG path points in GPS container space — shared with simulation */
+  svgOutline?: TrackPoint[]
+  pits?: Pit[]
+  raceControl?: RaceControl[]
+  /** True while GPS positions are unavailable and simulation is bridging the gap */
+  isSimulated?: boolean
+  /** All drivers' normalized GPS paths — shows the real racing lines through corners */
+  racingLines?: import('../../hooks/useTrackMap').RacingLineEntry[]
 }
 
+const MIN_ZOOM = 1
+const SIM_TRANSITION = 'transform 80ms linear'
+const MAX_ZOOM = 5
+const ZOOM_STEP = 0.2
+
 export default memo(function TrackMap({
-  outline,
-  livePositions,
-  drivers,
-  selectedDriver,
-  onSelectDriver,
-  sessionName,
-  ready,
+  outline, svgOutline: svgOutlineProp, livePositions, drivers, selectedDriver,
+  onSelectDriver, sessionName, ready, containerW, containerH,
+  circuitSvgUrl, pits, raceControl, isSimulated,
+  racingLines,
 }: Props) {
-  const driverMap = new Map(drivers.map((d) => [d.driver_number, d]));
-  const pts = outline
-    .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-    .join(" ");
+  const driverMap = new Map(drivers.map(d => [d.driver_number, d]))
+
+  // ── Circuit SVG inline data ───────────────────────────────────────────────
+  const [circuitSvgData, setCircuitSvgData] = useState<{ paths: string[]; vbW: number; vbH: number } | null>(null)
+
+  useEffect(() => {
+    if (!circuitSvgUrl) { setCircuitSvgData(null); return }
+    let cancelled = false
+    fetch(circuitSvgUrl)
+      .then(r => r.text())
+      .then(text => {
+        if (cancelled) return
+        const vbMatch = text.match(/viewBox="([^"]+)"/)
+        if (!vbMatch) return
+        const parts = vbMatch[1].trim().split(/\s+/).map(Number)
+        const vbW = parts[2], vbH = parts[3]
+        if (!vbW || !vbH) return
+        const dMatches = text.match(/\bd="([^"]+)"/g) ?? []
+        const paths = dMatches.map(m => m.slice(3, -1))
+        setCircuitSvgData({ paths, vbW, vbH })
+        setSvgLoaded(true)
+      })
+      .catch(() => { if (!cancelled) setSvgLoaded(true) })
+    return () => { cancelled = true }
+  }, [circuitSvgUrl])
+
+  const gpsBB = useMemo(() => {
+    if (!outline.length) return null
+    return {
+      minX: Math.min(...outline.map(p => p.x)),
+      maxX: Math.max(...outline.map(p => p.x)),
+      minY: Math.min(...outline.map(p => p.y)),
+      maxY: Math.max(...outline.map(p => p.y)),
+    }
+  }, [outline])
+
+  const circuitTransform = useMemo(() => {
+    if (!circuitSvgData) return null
+    const { vbW, vbH } = circuitSvgData
+    if (gpsBB) {
+      const sx = (gpsBB.maxX - gpsBB.minX) / vbW
+      const sy = (gpsBB.maxY - gpsBB.minY) / vbH
+      return `translate(${gpsBB.minX}, ${gpsBB.minY}) scale(${sx}, ${sy})`
+    }
+    const pad = 40
+    const s = Math.min((containerW - pad * 2) / vbW, (containerH - pad * 2) / vbH)
+    return `translate(${(containerW - vbW * s) / 2}, ${(containerH - vbH * s) / 2}) scale(${s})`
+  }, [circuitSvgData, gpsBB, containerW, containerH])
+
+  // ── Arc data (for GPS snap + arc-following animation) ─────────────────────
+  // Use pre-sampled SVG outline from prop (shared with simulation in Race.tsx)
+  // Falls back to GPS outline when circuit SVG not available for this track.
+  const effectiveOutline = (svgOutlineProp?.length ?? 0) >= 2 ? svgOutlineProp! : outline
+
+  const arcData = useMemo<ArcData | null>(
+    () => effectiveOutline.length >= 2 ? buildArcData(effectiveOutline) : null,
+    [effectiveOutline],
+  )
+  const outlineRef  = useRef(effectiveOutline)
+  const arcDataRef  = useRef(arcData)
+  outlineRef.current = effectiveOutline
+  arcDataRef.current = arcData
+
+  // ── GPS arc-following animation state ─────────────────────────────────────
+  // Each driver has a proxy object {frac} that AnimeJS animates monotonically.
+  // posAtFraction handles the mod-1 wrapping each frame.
+  type Proxy = { frac: number }
+  const driverProxies = useRef(new Map<number, Proxy>())
+  const driverAnims   = useRef(new Map<number, ReturnType<typeof animate>>())
+  const driverGEls    = useRef(new Map<number, SVGGElement>())
+
+  // When real GPS positions update: animate each driver along the track arc
+  useEffect(() => {
+    const arc = arcDataRef.current
+    const ol  = outlineRef.current
+    if (isSimulated || !arc || !ol.length) return
+
+    for (const lp of livePositions) {
+      const el = driverGEls.current.get(lp.driverNumber)
+      if (!el) continue
+
+      const { snapped, fraction: newFrac } = projectToTrack(lp, ol, arc)
+
+      let proxy = driverProxies.current.get(lp.driverNumber)
+      if (!proxy) {
+        // First appearance: teleport, no animation
+        proxy = { frac: newFrac }
+        driverProxies.current.set(lp.driverNumber, proxy)
+        el.style.transform = `translate(${snapped.x}px, ${snapped.y}px)`
+        continue
+      }
+
+      // Compute forward delta from current animated fraction to new fraction
+      const currentMod = ((proxy.frac % 1) + 1) % 1
+      let delta = newFrac - currentMod
+      if (delta < 0) delta += 1  // wrap forward
+      if (delta > 0.5) {
+        // GPS anomaly / data gap > half lap → teleport instead of animate backwards
+        proxy.frac = newFrac
+        el.style.transform = `translate(${snapped.x}px, ${snapped.y}px)`
+        continue
+      }
+
+      const endFrac = proxy.frac + delta
+
+      // Pause previous animation so we start from the current intermediate position
+      driverAnims.current.get(lp.driverNumber)?.pause()
+
+      const anim = animate(proxy, {
+        frac: endFrac,
+        duration: 2800,  // slightly under 3s poll so dots always feel current
+        ease: 'linear',
+        onUpdate: () => {
+          const arc = arcDataRef.current
+          const ol  = outlineRef.current
+          if (!arc || !ol.length) return
+          const { x, y } = posAtFraction(proxy!.frac, ol, arc)
+          el.style.transform = `translate(${x}px, ${y}px)`
+        },
+      })
+      driverAnims.current.set(lp.driverNumber, anim)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livePositions, isSimulated])
+
+  // Cleanup animations when effective outline changes (arc fractions no longer valid)
+  useEffect(() => {
+    for (const anim of driverAnims.current.values()) anim.pause()
+    driverAnims.current.clear()
+    driverProxies.current.clear()
+  }, [effectiveOutline])
+
+  // ── Pit + incident flags ──────────────────────────────────────────────────
+  const pitDrivers = useMemo(() => {
+    if (!pits?.length) return new Set<number>()
+    const latestPit = new Map<number, Pit>()
+    for (const p of pits) {
+      const cur = latestPit.get(p.driver_number)
+      if (!cur || p.lap_number > cur.lap_number) latestPit.set(p.driver_number, p)
+    }
+    return new Set(
+      [...latestPit.entries()]
+        .filter(([, p]) => p.pit_duration === null)
+        .map(([dn]) => dn)
+    )
+  }, [pits])
+
+  const { yellowFlagDrivers, hasActiveSC, hasRedFlag } = useMemo(() => {
+    if (!raceControl?.length) return { yellowFlagDrivers: new Set<number>(), hasActiveSC: false, hasRedFlag: false }
+    const latestTime = Math.max(...raceControl.map(rc => new Date(rc.date).getTime()))
+    const cutoff = latestTime - 120_000
+    const recent = raceControl.filter(rc => new Date(rc.date).getTime() > cutoff)
+    const yellowFlagDrivers = new Set(
+      recent.filter(rc => rc.flag === 'YELLOW' && rc.driver_number != null).map(rc => rc.driver_number!)
+    )
+    const hasActiveSC = recent.some(rc => rc.category === 'SafetyCar' || rc.message?.includes('SAFETY CAR'))
+    const hasRedFlag  = recent.some(rc => rc.flag === 'RED')
+    return { yellowFlagDrivers, hasActiveSC, hasRedFlag }
+  }, [raceControl])
+
+  // ── Zoom / pan ─────────────────────────────────────────────────────────────
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan]   = useState({ x: 0, y: 0 })
+  const isDragging      = useRef(false)
+  const lastMouse       = useRef({ x: 0, y: 0 })
+  const containerRef    = useRef<HTMLDivElement>(null)
+
+  const clampPan = useCallback((px: number, py: number, z: number) => {
+    const maxX = (containerW * (z - 1)) / 2
+    const maxY = (containerH * (z - 1)) / 2
+    return { x: Math.min(maxX, Math.max(-maxX, px)), y: Math.min(maxY, Math.max(-maxY, py)) }
+  }, [containerW, containerH])
+
+  const applyZoom = useCallback((next: number, originX?: number, originY?: number) => {
+    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next))
+    setZoom(z)
+    if (z <= 1) { setPan({ x: 0, y: 0 }); return }
+    if (originX !== undefined && originY !== undefined) {
+      setPan(prev => {
+        const dx = (originX - containerW / 2 - prev.x) * (next / zoom - 1)
+        const dy = (originY - containerH / 2 - prev.y) * (next / zoom - 1)
+        return clampPan(prev.x - dx, prev.y - dy, z)
+      })
+    }
+  }, [zoom, containerW, containerH, clampPan])
+
+  const [animateTransform, setAnimateTransform] = useState(false)
+
+  const zoomToDriver = useCallback((driverX: number, driverY: number) => {
+    const targetZ = Math.max(2.5, zoom)
+    const clamped = clampPan((containerW / 2 - driverX) * targetZ, (containerH / 2 - driverY) * targetZ, targetZ)
+    setAnimateTransform(true)
+    setZoom(targetZ)
+    setPan(clamped)
+    setTimeout(() => setAnimateTransform(false), 680)
+  }, [zoom, containerW, containerH, clampPan])
+
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    setAnimateTransform(false)
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
+    const rect   = containerRef.current?.getBoundingClientRect()
+    const ox     = rect ? e.clientX - rect.left : containerW / 2
+    const oy     = rect ? e.clientY - rect.top  : containerH / 2
+    applyZoom(zoom * factor, ox, oy)
+  }, [zoom, applyZoom, containerW, containerH])
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoom <= 1) return
+    setAnimateTransform(false)
+    isDragging.current = true
+    lastMouse.current  = { x: e.clientX, y: e.clientY }
+    document.body.style.cursor     = 'grabbing'
+    document.body.style.userSelect = 'none'
+  }, [zoom])
+
+  useEffect(() => {
+    if (zoom <= 1) return
+    const onMove = (e: MouseEvent) => {
+      if (!isDragging.current) return
+      const dx = e.clientX - lastMouse.current.x
+      const dy = e.clientY - lastMouse.current.y
+      lastMouse.current = { x: e.clientX, y: e.clientY }
+      setPan(prev => clampPan(prev.x + dx, prev.y + dy, zoom))
+    }
+    const onUp = () => {
+      isDragging.current = false
+      document.body.style.cursor     = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup',   onUp)
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+  }, [zoom, clampPan])
+
+  // ── Preload reveal ────────────────────────────────────────────────────────
+  // svgLoaded is set by the fetch effect above (or starts true when no circuit SVG)
+  const [svgLoaded, setSvgLoaded] = useState(!circuitSvgUrl)
+  const isFullyReady = ready && svgLoaded
+  const revealedRef  = useRef(false)
+  const overlayRef   = useRef<HTMLDivElement>(null)
+  const contentRef   = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { if (!circuitSvgUrl) setSvgLoaded(true); revealedRef.current = false }, [circuitSvgUrl])
+
+  useEffect(() => {
+    if (!isFullyReady || revealedRef.current) return
+    revealedRef.current = true
+    const overlay = overlayRef.current, content = contentRef.current
+    if (!content) return
+    animate(content, { opacity: [0, 1], scale: [0.96, 1], duration: 800, ease: 'outExpo' })
+    if (overlay) {
+      animate(overlay, {
+        opacity: [1, 0], duration: 600, delay: 200, ease: 'outQuart',
+        onComplete: () => { if (overlay) overlay.style.display = 'none' },
+      })
+    }
+  }, [isFullyReady])
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const transform           = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`
+  const transformTransition = animateTransform ? 'transform 0.62s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+  const pts = outline.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
 
   return (
     <div
+      ref={containerRef}
       className="absolute inset-0 overflow-hidden"
-      style={{ background: "#06070a" }}
+      style={{ background: '#06070a', cursor: zoom > 1 ? 'grab' : 'default' }}
+      onWheel={onWheel}
+      onMouseDown={onMouseDown}
     >
-      {/* Subtle grid texture */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)
-          `,
-          backgroundSize: "72px 72px",
-        }}
-      />
+      {/* Grid texture */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)`,
+        backgroundSize: '72px 72px', zIndex: 0,
+      }} />
 
-      {/* Radial vignette — darkens edges so panels blend better */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 70% at 50% 50%, transparent 30%, rgba(0,0,0,0.72) 100%)",
-        }}
-      />
-
-      {/* SVG map */}
-      <svg
-        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-        className="absolute inset-0 w-full h-full"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <defs>
-          <filter id="glow-track" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <filter id="glow-dot" x="-150%" y="-150%" width="400%" height="400%">
-            <feGaussianBlur stdDeviation="3.5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Track layers */}
-        {outline.length > 1 && (
-          <>
-            <g id="circuit-layout">
-              {/* Wide soft halo */}
-              <path
-                d={SINGAPORE_PATH}
-                fill="none"
-                stroke="rgba(255,255,255,1)"
-                strokeWidth="28"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Track body */}
-              <path
-                d={SINGAPORE_PATH}
-                fill="none"
-                stroke="#181c28"
-                strokeWidth="15"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Track surface */}
-              <path
-                d={SINGAPORE_PATH}
-                fill="none"
-                stroke="#22273a"
-                strokeWidth="11"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Edge highlight */}
-              <path
-                d={SINGAPORE_PATH}
-                fill="none"
-                stroke="rgba(255,255,255,1.055)"
-                strokeWidth="11"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Center dashes */}
-              <path
-                d={SINGAPORE_PATH}
-                fill="none"
-                stroke="rgba(255,255,255,1.14)"
-                strokeWidth="1"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray="9 7"
-              />
-            </g>{" "}
-          </>
+      {/* ── Loading overlay ── */}
+      <div ref={overlayRef} className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: '#06070a', zIndex: 20 }}>
+        {circuitSvgUrl && (
+          <img src={circuitSvgUrl} className="absolute inset-0 w-full h-full circuit-svg-art"
+            style={{ objectFit: 'contain', opacity: 0.12 }} aria-hidden />
         )}
-
-        {!ready && !outline.length && (
-          <text
-            x={SVG_W / 2}
-            y={SVG_H / 2}
-            fill="rgba(255,255,255,0.12)"
-            fontSize="13"
-            textAnchor="middle"
-            fontFamily="'Barlow Condensed', sans-serif"
-            letterSpacing="5"
-          >
-            ACQUIRING POSITION DATA
-          </text>
-        )}
-
-        {/* Driver dots — cx/cy CSS transitions for smooth movement */}
-        {livePositions.map((lp) => {
-          const driver = driverMap.get(lp.driverNumber);
-          const color = teamHex(driver?.team_colour);
-          const isSelected = lp.driverNumber === selectedDriver;
-          const acronym = driver?.name_acronym ?? String(lp.driverNumber);
-          const TRANSITION =
-            "cx 0.75s cubic-bezier(0.25,0.46,0.45,0.94), cy 0.75s cubic-bezier(0.25,0.46,0.45,0.94)";
-
-          return (
-            <g
-              key={lp.driverNumber}
-              onClick={() => onSelectDriver(lp.driverNumber)}
-              className="cursor-pointer"
-            >
-              {/* Soft outer glow halo */}
-              <circle
-                cx={lp.x}
-                cy={lp.y}
-                r={isSelected ? 20 : 13}
-                fill={color}
-                opacity={isSelected ? 0.22 : 0.1}
-                style={{ transition: TRANSITION }}
-              />
-
-              {/* Expanding pulse ring on selected driver */}
-              {isSelected && (
-                <circle
-                  cx={lp.x}
-                  cy={lp.y}
-                  r="13"
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="1.5"
-                  className="driver-pulse-ring"
-                  style={{ transition: TRANSITION }}
-                />
-              )}
-
-              {/* Inner solid ring (selected only) */}
-              {isSelected && (
-                <circle
-                  cx={lp.x}
-                  cy={lp.y}
-                  r="11"
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="0.8"
-                  opacity="0.5"
-                  style={{ transition: TRANSITION }}
-                />
-              )}
-
-              {/* Main driver dot */}
-              <circle
-                cx={lp.x}
-                cy={lp.y}
-                r={isSelected ? 9 : 5.5}
-                fill={color}
-                stroke={
-                  isSelected ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.5)"
-                }
-                strokeWidth={isSelected ? 2 : 0.7}
-                filter={isSelected ? "url(#glow-dot)" : undefined}
-                style={{ transition: `${TRANSITION}, r 0.3s ease` }}
-              />
-
-              {/* White center pip on selected */}
-              {isSelected && (
-                <circle
-                  cx={lp.x}
-                  cy={lp.y}
-                  r="2.5"
-                  fill="rgba(255,255,255,0.95)"
-                  style={{ transition: TRANSITION }}
-                />
-              )}
-
-              {/* Driver acronym */}
-              <text
-                x={lp.x}
-                y={lp.y - (isSelected ? 16 : 10)}
-                fill={isSelected ? "#ffffff" : color}
-                fontSize={isSelected ? "10" : "7.5"}
-                fontWeight="700"
-                textAnchor="middle"
-                fontFamily="'Barlow Condensed', sans-serif"
-                letterSpacing="0.8"
-                opacity={isSelected ? 1 : 0.88}
-                style={{
-                  transition: `x 0.75s cubic-bezier(0.25,0.46,0.45,0.94), y 0.75s cubic-bezier(0.25,0.46,0.45,0.94)`,
-                }}
-              >
-                {acronym}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Corner bracket decorations — broadcast TV style */}
-      <div
-        className="absolute top-0 left-0 w-14 h-14 pointer-events-none"
-        style={{
-          borderTop: "2px solid rgba(232,0,45,0.55)",
-          borderLeft: "2px solid rgba(232,0,45,0.55)",
-        }}
-      />
-      <div
-        className="absolute top-0 right-0 w-14 h-14 pointer-events-none"
-        style={{
-          borderTop: "2px solid rgba(232,0,45,0.55)",
-          borderRight: "2px solid rgba(232,0,45,0.55)",
-        }}
-      />
-      <div
-        className="absolute bottom-0 left-0 w-14 h-14 pointer-events-none"
-        style={{
-          borderBottom: "2px solid rgba(232,0,45,0.55)",
-          borderLeft: "2px solid rgba(232,0,45,0.55)",
-        }}
-      />
-      <div
-        className="absolute bottom-0 right-0 w-14 h-14 pointer-events-none"
-        style={{
-          borderBottom: "2px solid rgba(232,0,45,0.55)",
-          borderRight: "2px solid rgba(232,0,45,0.55)",
-        }}
-      />
-
-      {/* LIVE badge — top right */}
-      <div
-        className="absolute top-5 right-5 flex items-center gap-2 pointer-events-none"
-        style={{
-          padding: "4px 12px 4px 8px",
-          background: "rgba(232,0,45,0.12)",
-          border: "1px solid rgba(232,0,45,0.45)",
-          backdropFilter: "blur(8px)",
-        }}
-      >
-        <div
-          className="w-1.5 h-1.5 rounded-full"
-          style={{
-            background: "#e8002d",
-            animation: "flag-pulse 1.4s ease-in-out infinite",
-          }}
-        />
-        <span
-          style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: 11,
-            fontWeight: 800,
-            color: "#e8002d",
-            letterSpacing: "0.25em",
-          }}
-        >
-          LIVE
-        </span>
-      </div>
-
-      {/* Session name — bottom center */}
-      <div
-        className="absolute bottom-5 left-1/2 -translate-x-1/2 pointer-events-none"
-        style={{
-          padding: "3px 14px",
-          background: "rgba(6,7,10,0.7)",
-          border: "1px solid rgba(255,255,255,0.07)",
-          backdropFilter: "blur(8px)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        <span
-          style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: 10,
-            fontWeight: 700,
-            color: "rgba(255,255,255,0.35)",
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-          }}
-        >
-          {sessionName}
-        </span>
-      </div>
-
-      {/* Car count — bottom right */}
-      {livePositions.length > 0 && (
-        <div
-          className="absolute bottom-5 right-5 pointer-events-none"
-          style={{
-            padding: "3px 10px",
-            background: "rgba(6,7,10,0.6)",
-            border: "1px solid rgba(255,255,255,0.06)",
-            backdropFilter: "blur(6px)",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9,
-              color: "rgba(255,255,255,0.3)",
-              letterSpacing: "0.1em",
-            }}
-          >
-            {livePositions.length} CARS
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="track-scan-line" />
+        </div>
+        <div className="relative flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-1 rounded-full bg-[#e8002d] animate-pulse" />
+            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 10, fontWeight: 800, color: '#e8002d', letterSpacing: '0.35em' }}>
+              LOADING CIRCUIT
+            </span>
+            <div className="w-1 h-1 rounded-full bg-[#e8002d] animate-pulse" style={{ animationDelay: '0.4s' }} />
+          </div>
+          <div className="flex items-center gap-1.5">
+            {[0, 1, 2, 3, 4].map(i => (
+              <div key={i} className="w-px rounded-full" style={{
+                height: 8 + (i % 3) * 4, background: 'rgba(232,0,45,0.6)',
+                animation: `track-bar-pulse 0.9s ease-in-out ${i * 0.12}s infinite alternate`,
+              }} />
+            ))}
+          </div>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.15em' }}>
+            {sessionName}
           </span>
         </div>
-      )}
+      </div>
 
-      {/* Loading indicator */}
-      {!ready && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
-          <div className="w-1 h-1 rounded-full bg-[#6b7280] animate-pulse" />
-          <span
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: 10,
-              color: "#4b5563",
-              letterSpacing: "0.22em",
-            }}
+      {/* ── Map content ── */}
+      <div ref={contentRef} className="absolute inset-0" style={{ opacity: 0, zIndex: 1 }}>
+        {/* Vignette */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(ellipse 80% 70% at 50% 50%, transparent 30%, rgba(0,0,0,0.72) 100%)',
+          zIndex: 2,
+        }} />
+
+        {/* Simulation indicator — shown while GPS positions are loading */}
+        {isSimulated && livePositions.length > 0 && (
+          <div className="absolute top-3 right-3 pointer-events-none" style={{ zIndex: 5 }}>
+            <div style={{
+              padding: '2px 8px', background: 'rgba(139,92,246,0.12)',
+              border: '1px solid rgba(139,92,246,0.3)', backdropFilter: 'blur(6px)',
+            }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'rgba(139,92,246,0.8)', letterSpacing: '0.15em' }}>
+                ESTIMATING
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* SC / Red flag badge */}
+        {(hasActiveSC || hasRedFlag) && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none" style={{ zIndex: 5 }}>
+            <div style={{
+              padding: '3px 12px',
+              background: hasRedFlag ? 'rgba(239,68,68,0.15)' : 'rgba(250,204,21,0.12)',
+              border: `1px solid ${hasRedFlag ? 'rgba(239,68,68,0.5)' : 'rgba(250,204,21,0.4)'}`,
+              backdropFilter: 'blur(8px)',
+            }}>
+              <span style={{
+                fontFamily: "'Barlow Condensed', sans-serif", fontSize: 9, fontWeight: 800,
+                color: hasRedFlag ? '#ef4444' : '#facc15', letterSpacing: '0.3em',
+              }}>
+                {hasRedFlag ? '🔴 RED FLAG' : '🟡 SAFETY CAR'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Zoomable layer */}
+        <div className="absolute inset-0" style={{
+          transform, transformOrigin: 'center center',
+          willChange: 'transform', transition: transformTransition, zIndex: 1,
+        }}>
+          {/* Track + driver dots — single unified SVG layer */}
+          <svg
+            viewBox={`0 0 ${containerW} ${containerH}`}
+            className="absolute inset-0 w-full h-full"
+            preserveAspectRatio="none"
           >
-            LOADING TRACK DATA
-          </span>
+            <defs>
+              <filter id="glow-dot" x="-150%" y="-150%" width="400%" height="400%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+
+            {/* Circuit SVG paths — mapped into GPS coordinate space via transform */}
+            {circuitSvgData && circuitTransform && circuitSvgData.paths.map((d, i) => (
+              <g key={i} transform={circuitTransform}>
+                <path d={d} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="30"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="#191d28" strokeWidth="17"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="#22273a" strokeWidth="13"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="13"
+                  strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                <path d={d} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5"
+                  strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 13"
+                  vectorEffect="non-scaling-stroke" />
+              </g>
+            ))}
+
+            {/* GPS polyline fallback — only when no /tracks/ SVG for this circuit */}
+            {outline.length > 1 && !circuitSvgUrl && (
+              <g>
+                <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.025)" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={pts} fill="none" stroke="#191d28" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={pts} fill="none" stroke="#22273a" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.2"
+                  strokeLinecap="round" strokeLinejoin="round" strokeDasharray="7 13" />
+              </g>
+            )}
+
+            {/* Simulation path — reveals the arc simulated drivers follow */}
+            {isSimulated && effectiveOutline.length > 1 && (() => {
+              const simPts = effectiveOutline.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+              return (
+                <g>
+                  <polyline points={simPts} fill="none" stroke="rgba(139,92,246,0.18)" strokeWidth="10"
+                    strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points={simPts} fill="none" stroke="rgba(139,92,246,0.65)" strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              )
+            })()}
+
+            {/* All-drivers racing lines — actual GPS paths through corners */}
+            {racingLines && racingLines.map(({ driverNumber, points }) => {
+              if (points.length < 2) return null
+              const driver = driverMap.get(driverNumber)
+              const color  = teamHex(driver?.team_colour)
+              const pts2   = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+              return (
+                <g key={driverNumber}>
+                  <polyline points={pts2} fill="none" stroke={color} strokeWidth="4"
+                    strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />
+                  <polyline points={pts2} fill="none" stroke={color} strokeWidth="1.5"
+                    strokeLinecap="round" strokeLinejoin="round" opacity="0.55" />
+                </g>
+              )
+            })}
+
+            {/* Driver dots */}
+            {livePositions.map(lp => {
+              const driver     = driverMap.get(lp.driverNumber)
+              const isPitting  = pitDrivers.has(lp.driverNumber)
+              const hasYellow  = yellowFlagDrivers.has(lp.driverNumber)
+              const isSelected = lp.driverNumber === selectedDriver
+              const baseColor  = teamHex(driver?.team_colour)
+              const fillColor  =
+                isPitting    ? '#f59e0b' :
+                hasRedFlag   ? '#ef4444' :
+                hasActiveSC  ? '#facc15' : baseColor
+              const dotR  = isPitting ? 4 : isSelected ? 9 : 5.5
+              const label = isPitting ? 'PIT' : (driver?.name_acronym ?? String(lp.driverNumber))
+
+              const gStyle = isSimulated
+                ? { transform: `translate(${lp.x}px, ${lp.y}px)`, transition: SIM_TRANSITION, willChange: 'transform' as const }
+                : { willChange: 'transform' as const }
+
+              return (
+                <g
+                  key={lp.driverNumber}
+                  ref={(el) => {
+                    if (el) {
+                      driverGEls.current.set(lp.driverNumber, el)
+                      // Initial GPS position set directly (no React style, prevents flash at 0,0)
+                      if (!isSimulated && !driverProxies.current.has(lp.driverNumber)) {
+                        const arc = arcDataRef.current
+                        const ol  = outlineRef.current
+                        if (arc && ol.length) {
+                          const { snapped } = projectToTrack(lp, ol, arc)
+                          el.style.transform = `translate(${snapped.x}px, ${snapped.y}px)`
+                        }
+                      }
+                    } else {
+                      driverGEls.current.delete(lp.driverNumber)
+                      driverProxies.current.delete(lp.driverNumber)
+                      driverAnims.current.get(lp.driverNumber)?.pause()
+                      driverAnims.current.delete(lp.driverNumber)
+                    }
+                  }}
+                  style={gStyle}
+                  onClick={() => { onSelectDriver(lp.driverNumber); zoomToDriver(lp.x, lp.y) }}
+                  className="cursor-pointer"
+                >
+                  {/* Outer halo */}
+                  <circle r={isSelected ? 20 : 13} fill={fillColor} opacity={isSelected ? 0.22 : 0.1} />
+
+                  {/* Yellow flag incident ring */}
+                  {hasYellow && !isPitting && (
+                    <circle r="16" fill="none" stroke="#facc15" strokeWidth="1.5" className="incident-ring" />
+                  )}
+
+                  {/* Selected driver rings */}
+                  {isSelected && (
+                    <>
+                      <circle r="13" fill="none" stroke={isSimulated ? '#8b5cf6' : fillColor}
+                        strokeWidth="1.5" className="driver-pulse-ring" />
+                      <circle r="11" fill="none" stroke={isSimulated ? '#8b5cf6' : fillColor}
+                        strokeWidth="0.8" opacity="0.5" />
+                    </>
+                  )}
+
+                  {/* Pit pulse ring */}
+                  {isPitting && <circle r="8" fill="none" stroke="#f59e0b" strokeWidth="1.5" className="pit-pulse-ring" />}
+
+                  {/* Simulation breathing border (non-selected) */}
+                  {isSimulated && !isSelected && (
+                    <circle r={dotR + 3} fill="none" stroke="#8b5cf6" strokeWidth="1" className="sim-border-ring" />
+                  )}
+
+                  {/* Main dot */}
+                  <circle
+                    r={dotR}
+                    fill={fillColor}
+                    stroke={isSelected
+                      ? (isSimulated ? '#8b5cf6' : 'rgba(255,255,255,0.95)')
+                      : 'rgba(0,0,0,0.45)'}
+                    strokeWidth={isSelected ? 2 : 0.8}
+                    filter={isSelected ? 'url(#glow-dot)' : undefined}
+                    style={{ transition: 'r 0.3s ease' }}
+                  />
+                  {isSelected && <circle r="2.5" fill="rgba(255,255,255,0.95)" />}
+
+                  {/* Label */}
+                  <text
+                    y={isSelected ? -16 : isPitting ? -9 : -10}
+                    fill={isPitting ? '#f59e0b' : isSelected ? '#fff' : fillColor}
+                    fontSize={isSelected ? '10' : isPitting ? '6' : '7.5'}
+                    fontWeight="700" textAnchor="middle"
+                    fontFamily="'Barlow Condensed', sans-serif"
+                    letterSpacing="0.8"
+                    opacity={isSelected ? 1 : 0.88}
+                  >
+                    {label}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
         </div>
-      )}
+
+        {/* Corner brackets */}
+        {[['top-0 left-0', 'borderTop borderLeft'], ['top-0 right-0', 'borderTop borderRight'],
+          ['bottom-0 left-0', 'borderBottom borderLeft'], ['bottom-0 right-0', 'borderBottom borderRight']].map(([pos]) => (
+          <div key={pos} className={`absolute ${pos} w-10 h-10 pointer-events-none`}
+            style={{ border: '2px solid rgba(232,0,45,0.55)', borderRight: pos.includes('left') ? 'none' : undefined,
+              borderLeft: pos.includes('right') ? 'none' : undefined,
+              borderBottom: pos.includes('top-0') ? 'none' : undefined,
+              borderTop: pos.includes('bottom') ? 'none' : undefined, zIndex: 3 }} />
+        ))}
+
+        {/* Zoom controls */}
+        <div className="absolute bottom-4 left-4 flex flex-col gap-1 pointer-events-auto" style={{ zIndex: 4 }}>
+          {['+', '−'].map((lbl, i) => (
+            <button key={lbl} onClick={() => applyZoom(zoom + (i === 0 ? ZOOM_STEP : -ZOOM_STEP))}
+              className="w-7 h-7 flex items-center justify-center"
+              style={{ background: 'rgba(6,7,10,0.85)', border: '1px solid rgba(255,255,255,0.12)',
+                color: 'rgba(255,255,255,0.7)', fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 16, lineHeight: 1, backdropFilter: 'blur(6px)' }}>
+              {lbl}
+            </button>
+          ))}
+          {zoom > 1 && (
+            <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}
+              className="w-7 h-7 flex items-center justify-center"
+              style={{ background: 'rgba(232,0,45,0.15)', border: '1px solid rgba(232,0,45,0.4)',
+                color: 'rgba(232,0,45,0.9)', fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: 8, fontWeight: 800, letterSpacing: '0.08em', backdropFilter: 'blur(6px)' }}>
+              FIT
+            </button>
+          )}
+        </div>
+
+        {zoom > 1 && (
+          <div className="absolute bottom-4 left-14 pointer-events-none flex items-center" style={{ zIndex: 4 }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.05em' }}>
+              {zoom.toFixed(1)}×
+            </span>
+          </div>
+        )}
+
+        {/* Session name */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none" style={{ zIndex: 4, whiteSpace: 'nowrap' }}>
+          <div style={{ padding: '3px 14px', background: 'rgba(6,7,10,0.7)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(8px)' }}>
+            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 10, fontWeight: 700,
+              color: 'rgba(255,255,255,0.35)', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+              {sessionName}
+            </span>
+          </div>
+        </div>
+
+        {livePositions.length > 0 && (
+          <div className="absolute bottom-4 right-4 pointer-events-none" style={{ zIndex: 4 }}>
+            <div style={{ padding: '3px 10px', background: 'rgba(6,7,10,0.6)', border: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(6px)' }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em' }}>
+                {livePositions.length} CARS
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-  );
-});
+  )
+})

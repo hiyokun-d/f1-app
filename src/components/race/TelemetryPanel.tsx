@@ -33,10 +33,12 @@ export default function TelemetryPanel({
     if (!containerRef.current) return
     animate(containerRef.current, {
       opacity: [0, 1],
-      x: [20, 0],
-      duration: 360,
+      x: [width, 0],
+      duration: 480,
       ease: 'outExpo',
     })
+  // Run only on mount — width is the initial value
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleVerticalDrag = useCallback((e: React.MouseEvent) => {
@@ -108,8 +110,8 @@ export default function TelemetryPanel({
         <TeamRadioPlayer radio={radio} drivers={drivers} selectedDriver={selectedDriver} />
       </div>
 
-      {/* Drag handle on left edge */}
-      <ResizeHandle side="right" currentWidth={width} onResize={onWidthChange} minWidth={200} maxWidth={500} />
+      {/* Drag handle on left edge — minWidth=0 so user can drag to hide */}
+      <ResizeHandle side="right" currentWidth={width} onResize={onWidthChange} minWidth={0} maxWidth={500} />
     </div>
   )
 }

@@ -86,12 +86,23 @@
 
   <!-- Tagline -->
   <text
-    x="76" y="490"
+    x="76" y="488"
     font-family="Helvetica Neue, Arial, sans-serif"
     font-weight="400"
-    font-size="24"
+    font-size="22"
     fill="rgba(255,255,255,0.45)"
-    letter-spacing="5">F1 LIVE TRACKER · POWERED BY OPENF1</text>
+    letter-spacing="4">F1 LIVE TRACKER · POWERED BY OPENF1</text>
+
+  <!-- CTA button -->
+  <rect x="72" y="514" width="240" height="52" rx="6" fill="#e8002d"/>
+  <text
+    x="192" y="547"
+    font-family="Helvetica Neue, Arial, sans-serif"
+    font-weight="700"
+    font-size="20"
+    fill="white"
+    letter-spacing="2"
+    text-anchor="middle">WATCH LIVE →</text>
 
   <!-- Bottom bar -->
   <rect x="0" y="604" width="1200" height="26" fill="#e8002d" opacity="0.9"/>

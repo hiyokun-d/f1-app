@@ -5,9 +5,12 @@ import { isHistorical } from '../utils/session'
 export interface TrackPoint { x: number; y: number }
 export interface LivePosition { driverNumber: number; x: number; y: number }
 
+export interface RacingLineEntry { driverNumber: number; points: TrackPoint[] }
+
 export interface TrackMapState {
   outline: TrackPoint[]
   livePositions: LivePosition[]
+  racingLines: RacingLineEntry[]
   ready: boolean
 }
 
@@ -51,10 +54,12 @@ export function useTrackMap(
   const [state, setState] = useState<TrackMapState>({
     outline: [],
     livePositions: [],
+    racingLines: [],
     ready: false,
   })
 
-  const rawOutlineRef = useRef<TrackPoint[]>([])
+  const rawOutlineRef     = useRef<TrackPoint[]>([])
+  const rawRacingLinesRef = useRef(new Map<number, TrackPoint[]>())
   const boundsRef = useRef<Bounds | null>(null)
   const initDoneRef = useRef(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -67,7 +72,7 @@ export function useTrackMap(
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollPosRef    = useRef<() => Promise<void>>(async () => {})
 
-  // Re-normalize outline when container resizes
+  // Re-normalize outline + racing line when container resizes
   const containerWRef = useRef(containerW)
   const containerHRef = useRef(containerH)
   containerWRef.current = containerW
@@ -75,9 +80,15 @@ export function useTrackMap(
 
   useEffect(() => {
     if (!rawOutlineRef.current.length || !boundsRef.current) return
+    const b = boundsRef.current
+    const racingLines: RacingLineEntry[] = [...rawRacingLinesRef.current.entries()].map(([dn, raw]) => ({
+      driverNumber: dn,
+      points: normalizePoints(raw, b, containerW, containerH),
+    }))
     setState(prev => ({
       ...prev,
-      outline: normalizePoints(rawOutlineRef.current, boundsRef.current!, containerW, containerH),
+      outline: normalizePoints(rawOutlineRef.current, b, containerW, containerH),
+      ...(racingLines.length ? { racingLines } : {}),
     }))
   }, [containerW, containerH])
 
@@ -181,6 +192,64 @@ export function useTrackMap(
       return () => { if (pollRef.current) clearInterval(pollRef.current) }
     }
   }, [state.ready, pollPositions, sessionDateEnd])
+
+  // ── Racing lines — all drivers, last 2 minutes ────────────────────────────
+  useEffect(() => {
+    if (!state.ready || !boundsRef.current) return
+    let cancelled = false
+
+    const doFetch = async () => {
+      if (cancelled || !boundsRef.current) return
+      try {
+        const historical = isHistorical(sessionDateEnd)
+        const params: Parameters<typeof openF1.location>[0] = { session_key: sessionKey }
+        if (historical && sessionDateEnd) {
+          const end = new Date(sessionDateEnd)
+          params['date>'] = new Date(end.getTime() - 120_000).toISOString()
+          params['date<'] = end.toISOString()
+        } else {
+          params['date>'] = new Date(Date.now() - 120_000).toISOString()
+        }
+        const data = await openF1.location(params)
+        if (cancelled || !data.length || !boundsRef.current) return
+
+        // Group raw points by driver
+        const grouped = new Map<number, TrackPoint[]>()
+        for (const d of data) {
+          if (!grouped.has(d.driver_number)) grouped.set(d.driver_number, [])
+          grouped.get(d.driver_number)!.push({ x: d.x, y: d.y })
+        }
+
+        // Sample every 3rd point per driver, normalize with shared bounds
+        const b = boundsRef.current
+        const racingLines: RacingLineEntry[] = []
+        rawRacingLinesRef.current.clear()
+        for (const [dn, raw] of grouped) {
+          const sampled = raw.filter((_, i) => i % 3 === 0)
+          rawRacingLinesRef.current.set(dn, sampled)
+          racingLines.push({
+            driverNumber: dn,
+            points: normalizePoints(sampled, b, containerWRef.current, containerHRef.current),
+          })
+        }
+        setState(prev => ({ ...prev, racingLines }))
+      } catch { /* silent */ }
+    }
+
+    rawRacingLinesRef.current.clear()
+    setState(prev => ({ ...prev, racingLines: [] }))
+    doFetch()
+
+    let timer: ReturnType<typeof setInterval> | null = null
+    if (!isHistorical(sessionDateEnd)) {
+      timer = setInterval(doFetch, 30_000)
+    }
+
+    return () => {
+      cancelled = true
+      if (timer) clearInterval(timer)
+    }
+  }, [state.ready, sessionKey, sessionDateEnd])
 
   return state
 }

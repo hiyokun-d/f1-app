@@ -8,6 +8,7 @@ import { useSession } from "../hooks/useSession";
 import { useReplayFilter } from "../hooks/useReplayFilter";
 import { useDriverTelemetryPrefetch } from "../hooks/useDriverTelemetryPrefetch";
 import { useSimulatedPositions } from "../hooks/useSimulatedPositions";
+import { useSvgOutline } from "../hooks/useSvgOutline";
 import { getCircuitSvgUrl } from "../utils/circuitSvg";
 import type { OvertakeEvent } from "../types";
 
@@ -146,6 +147,11 @@ export default function Race() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [race.drivers.map((d) => d.driver_number).join(",")],
   );
+  // ── Selected driver (moved before useTrackMap so it can drive racing line) ─
+  const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
+  const effectiveDriver =
+    selectedDriver ?? race.positions[0]?.driver_number ?? null;
+
   const trackMap = useTrackMap(
     key,
     driverNumbers,
@@ -155,20 +161,22 @@ export default function Race() {
     centerSize.h,
   );
 
-  // ── Selected driver + car data ───────────────────────────────────────────
-  const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
-
   // Auto-reveal right panel when user explicitly selects a driver
   useEffect(() => {
     if (selectedDriver !== null && !rightVisible) setRightVisible(true);
   }, [selectedDriver, rightVisible]);
-  const effectiveDriver =
-    selectedDriver ?? race.positions[0]?.driver_number ?? null;
   const {
     latest: carLatest,
     history: carHistory,
     bufferEnd: carBufferEnd,
   } = useCarData(key, effectiveDriver, sessionDateEnd, replay.replayTime);
+
+  // ── SVG outline — shared by simulation + TrackMap ────────────────────────
+  const circuitSvgUrl = session
+    ? getCircuitSvgUrl(session.circuit_short_name ?? "", session.location ?? "")
+    : null;
+  const svgOutline = useSvgOutline(circuitSvgUrl, trackMap.outline);
+  const simOutline = svgOutline.length > 0 ? svgOutline : trackMap.outline;
 
   // ── Physics simulation — runs until real GPS positions arrive ─────────────
   const circuitHaystack = session
@@ -176,7 +184,7 @@ export default function Race() {
     : "";
   const useSimulation = trackMap.ready && trackMap.livePositions.length === 0;
   const simulatedPositions = useSimulatedPositions(
-    trackMap.outline,
+    simOutline,
     filtered.positions,
     filtered.intervals,
     filtered.laps,
@@ -265,10 +273,6 @@ export default function Race() {
     : `Session ${key}`;
   const sessionType = session?.session_type ?? "";
   const sessionLocation = session?.circuit_short_name ?? session?.location ?? "";
-  const circuitSvgUrl = session
-    ? getCircuitSvgUrl(session.circuit_short_name ?? "", session.location ?? "")
-    : null;
-
   // ── Loading / error states ───────────────────────────────────────────────
   if (race.loading) {
     return (
@@ -358,7 +362,8 @@ export default function Race() {
         <div ref={centerRef} className="flex-1 relative min-w-0">
           <TrackMap
             outline={trackMap.outline}
-            livePositions={trackMap.livePositions}
+            svgOutline={svgOutline}
+            livePositions={effectiveLivePositions}
             drivers={race.drivers}
             selectedDriver={effectiveDriver}
             onSelectDriver={setSelectedDriver}
@@ -369,6 +374,8 @@ export default function Race() {
             circuitSvgUrl={circuitSvgUrl}
             pits={filtered.pits}
             raceControl={filtered.raceControl}
+            isSimulated={useSimulation}
+            racingLines={trackMap.racingLines}
           />
 
           {/* Overtake banner sits on top of track map */}

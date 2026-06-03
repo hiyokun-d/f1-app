@@ -43,6 +43,9 @@ function normalizePoints(
   }))
 }
 
+// How far back to look for GPS positions at a given replayTime
+const REPLAY_POS_WINDOWS = [12_000, 45_000, 180_000] as const
+
 export function useTrackMap(
   sessionKey: number,
   driverNumbers: number[],
@@ -50,6 +53,9 @@ export function useTrackMap(
   sessionDateEnd: string | null = null,
   containerW = 800,
   containerH = 600,
+  replayTime: Date | null = null,
+  isPlaying = false,
+  speed: number = 1,
 ) {
   const [state, setState] = useState<TrackMapState>({
     outline: [],
@@ -66,8 +72,19 @@ export function useTrackMap(
   const driversRef = useRef<number[]>(driverNumbers)
   driversRef.current = driverNumbers
 
+  // Replay-aware refs (avoid stale closures in callbacks)
+  const replayTimeRef = useRef<Date | null>(replayTime)
+  replayTimeRef.current = replayTime
+  const isPlayingRef = useRef(isPlaying)
+  isPlayingRef.current = isPlaying
+  const speedRef = useRef(speed)
+  speedRef.current = speed
+
+  // Debounce: track last replay-time and real-time that triggered a fetch
+  const lastFetchedReplayRef = useRef<Date | null>(null)
+  const lastFetchRealMsRef   = useRef<number>(0)
+
   // Retry state for historical sessions with no GPS position data
-  const RETRY_WINDOWS = [15_000, 60_000, 300_000] as const
   const retryIdxRef   = useRef(0)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollPosRef    = useRef<() => Promise<void>>(async () => {})
@@ -134,29 +151,30 @@ export function useTrackMap(
       const historical = isHistorical(sessionDateEnd)
       const params: Parameters<typeof openF1.location>[0] = { session_key: sessionKey }
 
-      if (historical && sessionDateEnd) {
-        const windowMs = RETRY_WINDOWS[retryIdxRef.current] ?? RETRY_WINDOWS[RETRY_WINDOWS.length - 1]
-        const end = new Date(sessionDateEnd)
-        params['date>'] = new Date(end.getTime() - windowMs).toISOString()
-        params['date<'] = end.toISOString()
+      if (historical) {
+        // For replay: use replayTime as the reference point, fall back to sessionDateEnd
+        const refTime = replayTimeRef.current ?? (sessionDateEnd ? new Date(sessionDateEnd) : null)
+        if (!refTime) return
+        const windowMs = REPLAY_POS_WINDOWS[retryIdxRef.current] ?? REPLAY_POS_WINDOWS[REPLAY_POS_WINDOWS.length - 1]
+        params['date>'] = new Date(refTime.getTime() - windowMs).toISOString()
+        params['date<'] = refTime.toISOString()
       } else {
         params['date>'] = new Date(Date.now() - 10_000).toISOString()
       }
 
       const data = await openF1.location(params)
       if (!data.length) {
-        // Historical: expand window and retry until data found or windows exhausted
-        if (historical && retryIdxRef.current < RETRY_WINDOWS.length - 1) {
+        if (historical && retryIdxRef.current < REPLAY_POS_WINDOWS.length - 1) {
           retryIdxRef.current++
           retryTimerRef.current = setTimeout(() => pollPosRef.current(), 2_000)
         }
         return
       }
 
-      // Got data — clear retry state
       if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null }
       retryIdxRef.current = 0
 
+      // Take the latest position per driver within the fetched window
       const latestMap = data.reduce<Record<number, { x: number; y: number }>>((acc, d) => {
         acc[d.driver_number] = { x: d.x, y: d.y }
         return acc
@@ -168,6 +186,23 @@ export function useTrackMap(
       })
 
       setState(prev => ({ ...prev, livePositions }))
+
+      // Prefetch next window when replay is playing
+      if (historical && isPlayingRef.current) {
+        const currReplayTime = replayTimeRef.current
+        const sessEnd = sessionDateEnd ? new Date(sessionDateEnd) : null
+        if (currReplayTime && sessEnd) {
+          // 5 real-seconds ahead at current speed
+          const prefetchAt = new Date(currReplayTime.getTime() + speedRef.current * 5_000)
+          if (prefetchAt < sessEnd) {
+            openF1.location({
+              session_key: sessionKey,
+              'date>': new Date(prefetchAt.getTime() - REPLAY_POS_WINDOWS[0]).toISOString(),
+              'date<': prefetchAt.toISOString(),
+            }).catch(() => {})
+          }
+        }
+      }
     } catch { /* silent */ }
   }, [sessionKey, sessionDateEnd])
 
@@ -184,14 +219,37 @@ export function useTrackMap(
     initOutline()
   }, [driverNumbers.length, initOutline])
 
+  // Live polling (non-historical only)
   useEffect(() => {
-    if (!state.ready) return
+    if (!state.ready || isHistorical(sessionDateEnd)) return
     pollPositions()
-    if (!isHistorical(sessionDateEnd)) {
-      pollRef.current = setInterval(pollPositions, 3_000)
-      return () => { if (pollRef.current) clearInterval(pollRef.current) }
-    }
+    pollRef.current = setInterval(pollPositions, 3_000)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [state.ready, pollPositions, sessionDateEnd])
+
+  // Historical / replay position updates — triggered by replayTime changes
+  useEffect(() => {
+    if (!state.ready || !isHistorical(sessionDateEnd)) return
+
+    const curr = replayTimeRef.current
+    if (!curr) return
+
+    const prev = lastFetchedReplayRef.current
+    const replayDeltaMs = prev ? Math.abs(curr.getTime() - prev.getTime()) : Infinity
+    const realDeltaMs   = Date.now() - lastFetchRealMsRef.current
+
+    // Skip if replay time barely moved AND we fetched recently
+    if (replayDeltaMs < 8_000 && realDeltaMs < 1_500) return
+
+    // Reset retry window when user seeks (large jump in replay time)
+    if (replayDeltaMs > 30_000) retryIdxRef.current = 0
+
+    lastFetchedReplayRef.current = curr
+    lastFetchRealMsRef.current = Date.now()
+    pollPositions()
+  // replayTime is the trigger; state.ready + sessionDateEnd guard the guard
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replayTime, state.ready, sessionDateEnd, pollPositions])
 
   // ── Racing lines — all drivers, last 2 minutes ────────────────────────────
   useEffect(() => {
@@ -213,14 +271,12 @@ export function useTrackMap(
         const data = await openF1.location(params)
         if (cancelled || !data.length || !boundsRef.current) return
 
-        // Group raw points by driver
         const grouped = new Map<number, TrackPoint[]>()
         for (const d of data) {
           if (!grouped.has(d.driver_number)) grouped.set(d.driver_number, [])
           grouped.get(d.driver_number)!.push({ x: d.x, y: d.y })
         }
 
-        // Sample every 3rd point per driver, normalize with shared bounds
         const b = boundsRef.current
         const racingLines: RacingLineEntry[] = []
         rawRacingLinesRef.current.clear()

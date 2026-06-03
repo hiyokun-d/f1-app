@@ -159,6 +159,9 @@ export default function Race() {
     sessionDateEnd,
     centerSize.w,
     centerSize.h,
+    replay.replayTime,
+    replay.isPlaying,
+    replay.speed,
   );
 
   // Auto-reveal right panel when user explicitly selects a driver
